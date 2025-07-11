@@ -69,13 +69,29 @@ class UserAction(metaclass=UserActionMeta):
         self.param = param
         self.weight = 50
         self.completed = False
+        self.requires = ()
 
         match action:
             case UserActionType.DELETE: self.weight = 100
             case UserActionType.SET_COMMENT: self.weight = 90
+            case UserActionType.MARK_REGISTERED: self.weight = 85
+            case UserActionType.SKIP: self.weight = 85
             case UserActionType.CHANGE_LOGIN: self.weight = 10
             case UserActionType.CHANGE_PASSW_EDU: self.weight = 11
             case UserActionType.CHANGE_PASSW_LOCAL: self.weight = 20
+
+        match action:
+            case UserActionType.SKIP: self.requires = ('excel')
+            case UserActionType.DELETE: self.requires = ('learning')
+            case UserActionType.DELETE_FROM_TABLE: self.requires = ('excel')
+            case UserActionType.ADD_LABEL: self.requires = ('learning', 'excel')
+            case UserActionType.REMOVE_LABEL: self.requires = ('learning')
+            case UserActionType.CHANGE_LOGIN: self.requires = ('learning', 'excel')
+            case UserActionType.CHANGE_PASSW_LOCAL: self.requires = ('excel')
+            case UserActionType.CHANGE_PASSW_EDU: self.requires = ('learning')
+            case UserActionType.MARK_REGISTERED: self.requires = ('excel')
+            case UserActionType.SILENT_SKIP: self.requires = ()
+            case UserActionType.SET_COMMENT: self.requires = ('excel')
 
     def __eq__(self, other):
         if isinstance(other, UserActionType):
@@ -108,16 +124,16 @@ class UserAction(metaclass=UserActionMeta):
 
     def descr(self):
         if self.action == UserActionType.SKIP: return "Пропустить с пометкой в таблице"
-        if self.action == UserActionType.DELETE: return "Удалить пользователя"
-        if self.action == UserActionType.DELETE_FROM_TABLE: return "Удалить пользователя из таблицы"
-        if self.action == UserActionType.ADD_LABEL: return f"Добавить метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
-        if self.action == UserActionType.REMOVE_LABEL: return f"Убрать метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
-        if self.action == UserActionType.CHANGE_LOGIN: return "Записать в таблицу логин из eLearning"
-        if self.action == UserActionType.CHANGE_PASSW_EDU: return f"Установить пароль <[dodger_blue3]{self.param}[/dodger_blue3]> в eLearning"
-        if self.action == UserActionType.CHANGE_PASSW_LOCAL: return f"Установить пароль <[dodger_blue3]{self.param}[/dodger_blue3]> в таблице"
-        if self.action == UserActionType.MARK_REGISTERED: return "Отметить в таблице, что зарегистрирован"
-        if self.action == UserActionType.SILENT_SKIP: return "Пропустить без пометки в таблице"
-        if self.action == UserActionType.SET_COMMENT: return f"Установить комментарий <[dodger_blue3]{self.param}[/dodger_blue3]>"
+        elif self.action == UserActionType.DELETE: return "Удалить пользователя"
+        elif self.action == UserActionType.DELETE_FROM_TABLE: return "Удалить пользователя из таблицы"
+        elif self.action == UserActionType.ADD_LABEL: return f"Добавить метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
+        elif self.action == UserActionType.REMOVE_LABEL: return f"Убрать метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
+        elif self.action == UserActionType.CHANGE_LOGIN: return "Записать в таблицу логин из eLearning"
+        elif self.action == UserActionType.CHANGE_PASSW_EDU: return f"Установить пароль <[dodger_blue3]{self.param}[/dodger_blue3]> в eLearning"
+        elif self.action == UserActionType.CHANGE_PASSW_LOCAL: return f"Установить пароль <[dodger_blue3]{self.param}[/dodger_blue3]> в таблице"
+        elif self.action == UserActionType.MARK_REGISTERED: return "Отметить в таблице, что зарегистрирован"
+        elif self.action == UserActionType.SILENT_SKIP: return "Пропустить без пометки в таблице"
+        elif self.action == UserActionType.SET_COMMENT: return f"Установить комментарий <[dodger_blue3]{self.param}[/dodger_blue3]>"
         return None
 
 class TableSubject(NamedTuple):

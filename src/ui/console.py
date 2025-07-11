@@ -172,30 +172,50 @@ class Console(RichConsole):
         login = Prompt.ask("Enter your eLearning login")
         password = Prompt.ask("Enter your eLearning password", password=True)
 
-    def ask_user_action(self, with_help=False) -> str:
+    def ask_user_action(self, abilities: Iterable, with_help=False,) -> str:
+        excel = 'excel' in abilities
+        learning = 'learning' in abilities
+        choices = []
+        helptext = ""
+
+        items = [
+            {'sign': '!', 'desc': 'Перейти к след. пользователю', 'requires': (True)},
+            {'sign': '!!', 'desc': 'Выйти', 'requires': (True)},
+            {'sign': '?', 'desc': 'Показать справку', 'requires': (True)},
+            {'sign': 'с', 'desc': 'Установить комментарий в таблице', 'requires': (excel)},
+            {'sign': 'd', 'desc': 'Удалить пользователя', 'requires': (learning)},
+            {'sign': 'dt', 'desc': 'Удалить пользователя из таблицы', 'requires': (excel)},
+            {'sign': 'k', 'desc': 'Пропустить без пометки в таблице', 'requires': (True)},
+            {'sign': 'l', 'desc': 'Обновить логин в таблице', 'requires': (learning, excel)},
+            {'sign': 'm', 'desc': 'Назначить метку', 'requires': (learning)},
+            {'sign': 'md', 'desc': 'Убрать метку', 'requires': (learning)},
+            {'sign': 'pe', 'desc': 'Установить пароль в eLearning', 'requires': (learning)},
+            {'sign': 'pl', 'desc': 'Установить пароль в таблице', 'requires': (excel)},
+            {'sign': 'r', 'desc': 'Очистить список действий', 'requires': (True)},
+            {'sign': 'ro', 'desc': 'Удалить одно действие', 'requires': (True)},
+            {'sign': 's', 'desc': 'Пропустить с пометкой в таблице', 'requires': (excel)},
+            {'sign': 'sr', 'desc': 'Отметить в таблице, что зарегистрирован', 'requires': (excel)},
+            {'sign': 'x', 'desc': 'Показать доп. информацию', 'requires': (True)},
+        ]
+        
+        for item in items:
+            if type(item['requires']) == bool:
+                if not item['requires']:
+                    continue
+            elif not all(item['requires']):
+                continue
+
+            choices.append(item['sign'])
+            if with_help:
+                prefix = "\n " if helptext else " "
+                helptext += prefix + f"[magenta]{item['sign']:2}[/magenta]- {item['desc']}"
+
         if with_help:
-            helptext = " [magenta]![/magenta] - Перейти к след. пользователю"
-            helptext += "\n [magenta]!![/magenta]- Выйти"
-            helptext += "\n [magenta]?[/magenta] - Показать справку"
-            helptext += "\n [magenta]c[/magenta] - Установить комментарий в таблице"
-            helptext += "\n [magenta]d[/magenta] - Удалить пользователя"
-            helptext += "\n [magenta]dt[/magenta]- Удалить пользователя из таблицы"
-            helptext += "\n [magenta]k[/magenta] - Пропустить без пометки в таблице"
-            helptext += "\n [magenta]l[/magenta] - Обновить логин"
-            helptext += "\n [magenta]m[/magenta] - Назначить метку"
-            helptext += "\n [magenta]md[/magenta]- Убрать метку"
-            helptext += "\n [magenta]pe[/magenta]- Установить пароль в eLearning"
-            helptext += "\n [magenta]pl[/magenta]- Установить пароль в таблице"
-            helptext += "\n [magenta]r[/magenta] - Очистить список действий"
-            helptext += "\n [magenta]ro[/magenta]- Удалить одно действие"
-            helptext += "\n [magenta]s[/magenta] - Пропустить с пометкой в таблице"
-            helptext += "\n [magenta]sr[/magenta]- Отметить в таблице, что зарегистрирован"
-            helptext += "\n [magenta]x[/magenta] - Показать доп. информацию"
             self.print(Panel.fit(helptext))
 
         return Prompt.ask(
             "Выберите действие (? для справки)",
-            choices=['!', '!!', '?', 'c', 'd', 'dt', 'k', 'l', 'm', 'md', 'pe', 'pl', 'r', 'ro', 's', 'sr', 'x'],
+            choices=choices,
             case_sensitive=False, console=self
         )
 
@@ -545,10 +565,13 @@ class Console(RichConsole):
         
         status = self.status("Получение информации о пользователе... ")
         status.start()
+        abilities = ['learning']
         learning = self.create_learning()
         driver = ExcelDriver()
         if filepath != "!":
             driver.load(filepath)
+            abilities.append('excel')
+        
 
         # Загрузка данных пользователей
         try:
@@ -583,9 +606,11 @@ class Console(RichConsole):
                 if val == '!!': return
                 continue
             for uinfo in data[1]:
-                with self.status("Выбор действий... "):
-                    suggested = suggest_user_actions(uinfo, learning=learning)
-                uactions = self.select_user_actions(uinfo, suggested, add_top_gap=True)
+                suggested = []
+                if 'excel' in abilities:
+                    with self.status("Выбор действий... "):
+                        suggested = suggest_user_actions(uinfo, learning=learning)
+                uactions = self.select_user_actions(uinfo, suggested, abilities, add_top_gap=True)
                 try:
                     with self.status("Выполнение... "):
                         FileController.perform_user_actions(driver, learning, uinfo, uactions)
@@ -627,7 +652,7 @@ class Console(RichConsole):
                     FileController.step1(
                         filepath=filepath, 
                         progress_gen=self.gen_progress,
-                        ask_user_actions=lambda *args, **kwargs: self.select_user_actions(*args, add_top_gap=True, **kwargs),
+                        ask_user_actions=lambda *args, **kwargs: self.select_user_actions(*args, abilities=('learning', 'excel'), add_top_gap=True, **kwargs),
                         confirm_users_actions=self.confirm_users_actions,
                         message_callback=self.message_callback
                     )
@@ -759,8 +784,8 @@ class Console(RichConsole):
 
                 case 'exit': return
 
-    def select_user_actions(self, uinfo, 
-                suggested: List[UserAction]=[], add_top_gap=False) -> List[UserAction]:
+    def select_user_actions(self, uinfo, suggested: List[UserAction]=[], 
+            abilities: Iterable = (), add_top_gap=False) -> List[UserAction]:
         selection = None
         detailed_view = False
         is_first_run = True
@@ -801,7 +826,7 @@ class Console(RichConsole):
                 print_uactions()
                 self.print("[green]Предложенных действий нет[/green]")
             try:
-                selection = self.ask_user_action(with_help=(selection == "?"))
+                selection = self.ask_user_action(abilities, with_help=(selection == "?"))
             except KeyboardInterrupt:
                 selection = None
             

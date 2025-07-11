@@ -76,6 +76,14 @@ def get_mock_user() -> UserInfo:
         courses=tuple(courses)
     )
 
+def generate_password(user_table_login: str = ""):
+    if not user_table_login:
+        return 'EL_' + generate_random_string(6)
+    try:
+        return (int(user_table_login[-5:])+23000)*15
+    except (ValueError):
+        return 'EL_' + generate_random_string(6)
+
 def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
     suggestions = []
     if uinfo.registered:
@@ -119,16 +127,14 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
                         ):
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_LOCAL, password))
                     else:
-                        try:
-                            password = (int(uinfo.table.login[-5:])+23000)*15
-                        except (ValueError, AttributeError):
-                            password = 'EL_' + generate_random_string(6)
+                        password = generate_password(user.table.login)
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_EDU, password))
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_LOCAL, password))
                 ##
         ##
 
         if uinfo.table.subjects:
+            appended = False
             for subject in uinfo.table.subjects:
                 try:
                     # label = str(LabelController.get_label_primitive(subject))
@@ -136,8 +142,11 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
                     label = LabelController.get_label(subject.name, selected_date=selected_date)
                     if not uinfo.tags or (uinfo.tags and label not in uinfo.tags):
                         suggestions.append(UserAction(UserActionType.ADD_LABEL, label))
+                        appended = True
                 except LabelControllerError:
                     print("\n\033[31mSUGGESTION ERROR: Cannot get label for subject", subject, "\033[0m")
+            if appended:
+                suggestions.append(UserAction(UserActionType.MARK_REGISTERED))
     
     return suggestions
 
