@@ -34,7 +34,7 @@ from datatypes import (
 from utils import (
     pluralize, get_mock_user, 
     suggest_user_actions, 
-    copy_to_clipboard
+    copy_to_clipboard, generate_password
 )
 
 
@@ -190,6 +190,7 @@ class Console(RichConsole):
             {'sign': 'm', 'desc': 'Назначить метку', 'requires': (learning)},
             {'sign': 'md', 'desc': 'Убрать метку', 'requires': (learning)},
             {'sign': 'pe', 'desc': 'Установить пароль в eLearning', 'requires': (learning)},
+            {'sign': 'pg', 'desc': 'Сгенерировать пароль', 'requires': (True)},
             {'sign': 'pl', 'desc': 'Установить пароль в таблице', 'requires': (excel)},
             {'sign': 'r', 'desc': 'Очистить список действий', 'requires': (True)},
             {'sign': 'ro', 'desc': 'Удалить одно действие', 'requires': (True)},
@@ -876,6 +877,23 @@ class Console(RichConsole):
                 if UserActionType.CHANGE_PASSW_LOCAL in uactions_return:
                     uactions_return.remove(UserActionType.CHANGE_PASSW_LOCAL)
                 uactions_return_add(UserAction(UserActionType.CHANGE_PASSW_LOCAL, passw))
+            elif (selection == 'pg'):
+                login = uinfo.table.login if uinfo.table and uinfo.table.login else ""
+                passw = generate_password(login)
+                changed = False
+                if UserActionType.CHANGE_PASSW_LOCAL in uactions_return:
+                    uactions_return.remove(UserActionType.CHANGE_PASSW_LOCAL)
+                if UserActionType.CHANGE_PASSW_EDU in uactions_return:
+                    uactions_return.remove(UserActionType.CHANGE_PASSW_EDU)
+                if 'excel' in abilities:
+                    uactions_return_add(UserAction(UserActionType.CHANGE_PASSW_LOCAL, passw))
+                    changed = True
+                if 'learning' in abilities:
+                    uactions_return_add(UserAction(UserActionType.CHANGE_PASSW_EDU, passw))
+                    changed = True
+                if changed:
+                    self.print("[green]Действия по смене пароля добавлены.")
+                    input("Нажмите Enter чтобы продолжить...")
             elif (selection == 'r'): uactions_return.clear()
             elif (selection == 'ro'): 
                 idx = -1 + self.ask_int("Введите номер действия", 1, len(uactions_return))
