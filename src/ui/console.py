@@ -870,5 +870,9 @@ class Console(RichConsole):
         return uactions_return
 
     def test(self):
-        pass
+        from utils import is_red_color
+        print(is_red_color('ff0000'))
+        print(is_red_color('f40d32'))
+        print(is_red_color('e36b09'))
+        print(is_red_color('dbd40d'))
         

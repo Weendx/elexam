@@ -188,7 +188,7 @@ class FileController:
         for row in ws_labels.iter_rows(min_row=2):
             fill = row[1].fill.fgColor
             if fill.type == 'theme':
-                if fill.value != 9 and fill.value != 6:
+                if fill.value not in [9,7,6]:
                     raise Exception('unknown theme', fill)
             elif fill.type == 'rgb':
                 if is_blue_color(fill.value): continue

@@ -169,11 +169,12 @@ def is_blue_color(hex_color: str) -> bool:
     return blue > red and blue > green
 
 def is_red_color(hex_color: str) -> bool:
-    if hex_color == 'FF558ED5': return True
     if len(hex_color) == 8:  # AARRGGBB
         hex_color = hex_color[2:]
     red = int(hex_color[0:2], 16)
     green = int(hex_color[2:4], 16)
     blue = int(hex_color[4:6], 16)
 
-    return red > blue and red > green
+    min_delta = 125
+
+    return red > blue and red > green and red - blue > min_delta and red - green > min_delta
