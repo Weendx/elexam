@@ -182,7 +182,7 @@ class Console(RichConsole):
             {'sign': '!', 'desc': 'Перейти к след. пользователю', 'requires': (True)},
             {'sign': '!!', 'desc': 'Выйти', 'requires': (True)},
             {'sign': '?', 'desc': 'Показать справку', 'requires': (True)},
-            {'sign': 'с', 'desc': 'Установить комментарий в таблице', 'requires': (excel)},
+            {'sign': 'c', 'desc': 'Установить комментарий в таблице', 'requires': (excel)},
             {'sign': 'd', 'desc': 'Удалить пользователя', 'requires': (learning)},
             {'sign': 'dt', 'desc': 'Удалить пользователя из таблицы', 'requires': (excel)},
             {'sign': 'k', 'desc': 'Пропустить без пометки в таблице', 'requires': (True)},
