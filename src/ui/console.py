@@ -545,9 +545,9 @@ class Console(RichConsole):
         for i, data in enumerate(data_to_show):
             title = None
             if data_to_show_len > 1:
-                title = f"[cyan][not dim]Пользователь {data[0]} [bold]({i+1}[not bold]/[bold]{data_to_show_len})"
+                title = f"[cyan][not dim]Пользователь {data[0]} [bold]({i+1}[/bold]/[bold]{data_to_show_len})"
             if not data[1]:
-                self.print(f"[magenta]Пользователь {data[0]} [bold]({i+1}[not bold]/[bold]{data_to_show_len}) не найден")
+                self.print(f"[magenta]Пользователь {data[0]} [bold]({i+1}[/bold]/[bold]{data_to_show_len})[/bold]не найден")
                 val = input("Нажмите Enter чтобы продолжить...")
                 if val == '!!': return
                 continue
