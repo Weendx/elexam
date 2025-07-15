@@ -491,6 +491,11 @@ class Console(RichConsole):
         if '--settings' in sys.argv:
             print(Settings.get_filepath())
             return
+        
+        if '--version' in sys.argv:
+            import version
+            print(Text(version.VERSION))
+            return
 
         try:
             self.run_menu()
