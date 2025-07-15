@@ -118,11 +118,25 @@ class LearningDriver:
             return True
         return False
 
-    def delete(self, user_id):
+    def delete(self, user_id) -> bool:
         self._auth_check()
 
         params = {'postMassIds_grid': user_id, 'massActionsAll_grid': user_id}
         self.request('/user/list/delete-by', params, 'post')
+        # успешно!
+        is_ajax_request_value = self._session.headers.pop('IS_AJAX_REQUEST', None)
+
+        page = self.request('/user/list/delete-by', params, 'post', format_='html')
+        
+        if is_ajax_request_value:
+            self._session.headers.update({'IS_AJAX_REQUEST': is_ajax_request_value})
+        
+        msg = self.get_notification(page)
+
+        if "успешно" in msg:
+            return True
+        else:
+            raise SomethingWrong(f"Something wrong on user {user_id} deleting: " + repr(msg))
 
     def get_current_info(self):
         self._auth_check()
@@ -208,6 +222,8 @@ class LearningDriver:
         courses = dict()
 
         for row in data:
+            person_id = row.get('personId')
+            if int(person_id) != int(user_id): continue
             course_id = row.get('subjectId')
             if not course_id: continue
             course_id = int(course_id)
@@ -255,6 +271,7 @@ class LearningDriver:
         uinfo_return = list()
 
         for row in data:
+            if str(row['email']).lower() != str(email).lower(): continue
             uinfo = UserInfo(
                 mid = int(row['MID']),
                 login = row['login'],
@@ -279,6 +296,8 @@ class LearningDriver:
             
             uinfo_return.append(uinfo)
 
+        if not uinfo_return:
+            raise UserNotFound
         return uinfo_return
 
     def get_user_password(self, user_id) -> str | None:
@@ -298,6 +317,8 @@ class LearningDriver:
         general_data = messages_general.get('data')
         if not general_data: return None
         for general_data_row in general_data:
+            receiver_id = general_data_row.get('receiver_id')
+            if int(receiver_id) != int(user_id): continue
             theme = general_data_row.get('theme')
             if not 'Изменение пароля' in theme and not 'Вы зарегистрированы' in theme:
                 continue
@@ -339,7 +360,11 @@ class LearningDriver:
             'email': email
         }
         resp = self.request('/user/list', params=params, method='post')
-        return bool(resp.get('data'))
+        data = resp.get('data')
+        if not data: return False
+        for row in data:
+            if str(row['email']).lower() == str(email).lower(): return True
+        return False
 
     def logout(self):
         self.request('/logout')
@@ -361,6 +386,7 @@ class LearningDriver:
                 query = '?' + urllib.parse.urlencode(params) if not '?' in endpoint else ''
                 resp = self._session.get(self.website + endpoint + query, headers=headers)
                 # print('GET', resp.url)
+                print(resp.request.headers)
                 if format_ == "json":
                     resp = resp.json()
                 else:
@@ -388,17 +414,30 @@ class LearningDriver:
 
         return resp
 
-    def set_password(self, user_id, password):
+    def set_password(self, user_id, password) -> bool:
         self._auth_check()
         if not self.switch_role('admin'):
             raise SomethingWrong
+        
         params = {
             'postMassIds_grid': user_id, 'massActionsAll_grid': user_id,
             'pass': password
         }
         
-        # responce is dumb
-        self.request('/user/list/set-password', params, 'post')
+        # Пароль успешно назначен!
+        is_ajax_request_value = self._session.headers.pop('IS_AJAX_REQUEST', None)
+
+        page = self.request('/user/list/set-password', params, 'post', format_='html')
+        
+        if is_ajax_request_value:
+            self._session.headers.update({'IS_AJAX_REQUEST': is_ajax_request_value})
+        
+        msg = self.get_notification(page)
+
+        if "успешно" in msg:
+            return True
+        else:
+            raise SomethingWrong("Something wrong on password change: " + repr(msg))
 
     def switch_role(self, role: str) -> bool:
         self._auth_check()
