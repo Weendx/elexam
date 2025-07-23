@@ -538,7 +538,7 @@ class Console(RichConsole):
             case 2:
                 while not emails:
                     emails = self.ask_bulk("[cyan]Введите адреса email")
-                    
+
         emails_len = len(emails)
         _phr1 = pluralize(emails_len, ['Введена', 'Введены', 'Введено'])
         _phr2 = pluralize(emails_len, ['почта', 'почты', 'почт'])
@@ -564,19 +564,19 @@ class Console(RichConsole):
             users = learning.get_group_members(group_id, emails)
         
         if not users:
-            self.print("[red]Пользователи в группе не найдены")
+            self.print("[red]Участники в группе не найдены")
             input("Нажмите Enter чтобы продолжить...")
             return
 
         user_ids = ",".join([str(x[0]) for x in users])
 
-        with self.status("Исключение пользователей из группы... "):
+        with self.status("Исключение участников из группы... "):
             learning.remove_from_group(group_id, user_ids)
         
         users_len = len(users)
-        p_excluded = pluralize(users_len, ['исключен', 'исключены', 'исключено'])
-        p_user = pluralize(users_len, ['пользователь', 'пользователя', 'пользователей'])
-        self.print(f"[green]Из группы {group_name} {p_excluded} {users_len} {p_user}")
+        _excluded = pluralize(users_len, ['исключен', 'исключены', 'исключено'])
+        _members = pluralize(users_len, ['участник', 'участника', 'участников'])
+        self.print(f"[green]Из группы {group_name} {_excluded} {users_len} {_members}")
         input("Нажмите Enter чтобы продолжить... ")
             
     def run_action_show_user_info(self) -> Optional[str]:
