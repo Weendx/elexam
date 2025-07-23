@@ -139,8 +139,6 @@ class FileController:
                 xlsx.delete_user_from_workbook(uinfo.table.email)
             elif uact == UserActionType.ADD_LABEL:
                 learning.add_tag(uinfo.mid, uact.param)
-                # xlsx.mark_user_as_registered(uinfo.table.email)
-                xlsx_changed = True
             elif uact == UserActionType.REMOVE_LABEL:
                 learning.remove_tag(uinfo.mid, uact.param)
             elif uact == UserActionType.CHANGE_LOGIN:
