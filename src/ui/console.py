@@ -514,6 +514,10 @@ class Console(RichConsole):
             return
 
         try:
+            learning = self.create_learning()
+            with self.status("Загрузка... "):
+                if not learning.auth_check():
+                    del Settings()[self.AUTHCOOKIEID]
             self.run_menu()
         except KeyboardInterrupt:
             pass
