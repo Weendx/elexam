@@ -180,31 +180,43 @@ class FileController:
         
         ws_labels = driver._xlsx['Для предметов и меток']
         ws_labels_users = {}
+        cols = {
+            'email': driver.get_column_by_name(ws_labels, 'email') - 1,
+            'surname': driver.get_column_by_name(ws_labels, 'ФИО') - 1,
+            'name': driver.get_column_by_name(ws_labels, 'ФИО') + 1 - 1,
+            'patronymic': driver.get_column_by_name(ws_labels, 'ФИО') + 2 - 1,
+            'login': driver.get_column_by_name(ws_labels, 'Логин') - 1,
+            'password': driver.get_column_by_name(ws_labels, 'Пароль') - 1,
+            'admission_code': driver.get_column_by_name(ws_labels, 'Код поступ.') - 1,
+            'subject_name': driver.get_column_by_name(ws_labels, 'Предмет') - 1,
+            'subject_date': driver.get_column_by_name(ws_labels, 'Выбранная дата') - 1,
+        }
         User = namedtuple('User', [
             'email', 'surname', 'name', 'patronymic', 
             'login', 'password', 'admission_code', 'subjects'
         ])
 
         for row in ws_labels.iter_rows(min_row=2):
-            fill = row[1].fill.fgColor
+            fill = row[cols['surname']].fill.fgColor
             if fill.type == 'theme':
                 if fill.value not in [9,7,6]:
                     raise Exception('unknown theme', fill)
             elif fill.type == 'rgb':
                 if is_blue_color(fill.value): continue
                 if is_red_color(fill.value): continue
-            email = row[0].value
+            email = row[cols['email']].value
             user = ws_labels_users.get(email)
             if not user:
                 user = User(
                     email=email, 
-                    surname=row[1].value, name=row[2].value, patronymic=row[3].value,
-                    login=row[4].value, password=row[5].value,
-                    admission_code=row[7].value, subjects=[]
+                    surname=row[cols['surname']].value, name=row[cols['name']].value, 
+                    patronymic=row[cols['patronymic']].value,
+                    login=row[cols['login']].value, password=row[cols['password']].value,
+                    admission_code=row[cols['admission_code']].value, subjects=[]
                 )
                 ws_labels_users[email] = user
-            user.subjects.append((row[9].value, row[12].value))
-
+            user.subjects.append((row[cols['subject_name']].value, row[cols['subject_date']].value))
+        
         if '_csv' in driver._xlsx.sheetnames:
             driver._xlsx.remove(driver._xlsx['_csv'])
             driver.save()
