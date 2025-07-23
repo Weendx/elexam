@@ -538,7 +538,11 @@ class Console(RichConsole):
             case 2:
                 while not emails:
                     emails = self.ask_bulk("[cyan]Введите адреса email")
-        self.print(f"\nВведено {len(emails)} почт:")
+                    
+        emails_len = len(emails)
+        _phr1 = pluralize(emails_len, ['Введена', 'Введены', 'Введено'])
+        _phr2 = pluralize(emails_len, ['почта', 'почты', 'почт'])
+        self.print(f"\n{_phr1} {emails_len} {_phr2}:")
         self.print(Text(", ".join(emails), style='dim'), "\n")
         if not Confirm.ask("Продолжить?"): return
 
