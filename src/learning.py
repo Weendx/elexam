@@ -386,7 +386,6 @@ class LearningDriver:
                 query = '?' + urllib.parse.urlencode(params) if not '?' in endpoint else ''
                 resp = self._session.get(self.website + endpoint + query, headers=headers)
                 # print('GET', resp.url)
-                print(resp.request.headers)
                 if format_ == "json":
                     resp = resp.json()
                 else:

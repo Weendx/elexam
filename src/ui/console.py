@@ -552,7 +552,7 @@ class Console(RichConsole):
             if data_to_show_len > 1:
                 title = f"[cyan][not dim]Пользователь {data[0]} [bold]({i+1}[/bold]/[bold]{data_to_show_len})"
             if not data[1]:
-                self.print(f"[magenta]Пользователь {data[0]} [bold]({i+1}[/bold]/[bold]{data_to_show_len})[/bold]не найден")
+                self.print(f"[magenta]Пользователь {data[0]} [bold]({i+1}[/bold]/[bold]{data_to_show_len})[/bold] не найден")
                 val = input("Нажмите Enter чтобы продолжить...")
                 if val == '!!': return
                 continue
