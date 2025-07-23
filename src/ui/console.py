@@ -60,6 +60,7 @@ class Console(RichConsole):
             menuitems.append(MenuItem('Выполнить действия с пользователем (eLearning)', 'perform_actions'))
             menuitems.append(MenuItem('Получить информацию о пользователе (eLearning)', 'show_uinfo'))
             menuitems.append(MenuItem('Найти пароль пользователя (eLearning)', 'find_password'))
+            menuitems.append(MenuItem('Убрать из группы (eLearning)', 'remove_from_group'))
         menuitems.append(MenuItem('Управление метками', 'manage_labels'))
         if logged:
             menuitems.append(MenuItem('Выйти из eLearning', 'logout'))
@@ -95,6 +96,21 @@ class Console(RichConsole):
                 print()
         return value
     
+    def ask_bulk(self, message: str, 
+            validator: Optional[Callable[[str], bool]] = None, default=None, end="!") -> List[str]:
+        """ Мультиэлементный ввод. Для окончания на пустой строке нажать Ctrl-D """
+        if message:
+            self.print(message + ":")
+        self.print("[yellow]Для завершения нажмите Ctrl-D [bold]на пустой строке\n")
+        
+        input_ = sys.stdin.readlines()
+        result = []
+        for elem in input_:
+            elem = elem.strip()
+            if not elem: continue
+            result.append(elem)
+        return result
+
     @staticmethod
     def ask_int(message: str, min_ = None, max_ = None,
                     validator: Optional[Callable[[int], bool]] = None, default=None) -> int:
@@ -501,7 +517,60 @@ class Console(RichConsole):
             self.run_menu()
         except KeyboardInterrupt:
             pass
+        except EOFError:
+            pass
 
+    def run_action_remove_from_group(self) -> None:
+        emails = []
+
+        self.print("Выберите вариант ввода:")
+        self.print("1 - через запятую")
+        self.print("2 - через перенос строки")
+        variant = self.ask_int("Ввод", min_=1, max_=2)
+        match variant:
+            case 1:
+                emails = self.ask("[cyan]Введите адреса email через запятую")
+                emails = [x.strip() for x in emails.split(',')]
+            case 2:
+                while not emails:
+                    emails = self.ask_bulk("[cyan]Введите адреса email")
+        self.print(f"\nВведено {len(emails)} почт:")
+        self.print(Text(", ".join(emails), style='dim'), "\n")
+        if not Confirm.ask("Продолжить?"): return
+
+        learning = self.create_learning()
+
+        def group_name_input_validator(self, value):
+            with self.status("Проверка... "):
+                id_ = learning.find_group_id(value)
+            if id_ == None:
+                self.print(f"[red]Группа `{value}` не найдена")
+            return id_ != None
+
+        group_name = self.ask('[cyan]Введите название группы', lambda x: group_name_input_validator(self, x))
+        
+        with self.status("Загрузка... "):
+            group_id = learning.find_group_id(group_name)
+            
+            # return format: [(user_id, user_email), ...]
+            users = learning.get_group_members(group_id, emails)
+        
+        if not users:
+            self.print("[red]Пользователи в группе не найдены")
+            input("Нажмите Enter чтобы продолжить...")
+            return
+
+        user_ids = ",".join([str(x[0]) for x in users])
+
+        with self.status("Исключение пользователей из группы... "):
+            learning.remove_from_group(group_id, user_ids)
+        
+        users_len = len(users)
+        p_excluded = pluralize(users_len, ['исключен', 'исключены', 'исключено'])
+        p_user = pluralize(users_len, ['пользователь', 'пользователя', 'пользователей'])
+        self.print(f"[green]Из группы {group_name} {p_excluded} {users_len} {p_user}")
+        input("Нажмите Enter чтобы продолжить... ")
+            
     def run_action_show_user_info(self) -> Optional[str]:
         emails = self.ask("Введите email").split(', ')
         if emails[0] == '!step1':
@@ -613,10 +682,13 @@ class Console(RichConsole):
                 continue
             for uinfo in data[1]:
                 suggested = []
-                if 'excel' in abilities:
+                current_abilities = ['learning']
+                if 'excel' in abilities and uinfo.table:
+                    current_abilities.append('excel')
+                if 'excel' in current_abilities:
                     with self.status("Выбор действий... "):
                         suggested = suggest_user_actions(uinfo, learning=learning)
-                uactions = self.select_user_actions(uinfo, suggested, abilities, add_top_gap=True)
+                uactions = self.select_user_actions(uinfo, suggested, current_abilities, add_top_gap=True)
                 try:
                     with self.status("Выполнение... "):
                         FileController.perform_user_actions(driver, learning, uinfo, uactions)
@@ -698,6 +770,8 @@ class Console(RichConsole):
                     menu, menuitems, menuitems_len = self._create_menu()  # update menu
             elif action == 'manage_labels':
                 self.run_labels_menu()
+            elif action == 'remove_from_group':
+                self.run_action_remove_from_group()
             elif action == 'exit':
                 exit()
             _is_first_run = False
@@ -918,9 +992,6 @@ class Console(RichConsole):
         return uactions_return
 
     def test(self):
-        from utils import is_red_color
-        print(is_red_color('ff0000'))
-        print(is_red_color('f40d32'))
-        print(is_red_color('e36b09'))
-        print(is_red_color('dbd40d'))
+        learning = self.create_learning()
+        print(learning.get_group_members(465, ['semernya94@bk.ru']))
         

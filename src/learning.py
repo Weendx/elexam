@@ -80,6 +80,9 @@ class LearningDriver:
 
     def add_tag(self, user_id, tag):
         self._auth_check()
+        if not self.switch_role('admin'):
+            raise SomethingWrong
+
         params = {
             'postMassIds_grid': user_id, 
             'massActionsAll_grid': user_id,
@@ -121,8 +124,11 @@ class LearningDriver:
     def delete(self, user_id) -> bool:
         self._auth_check()
 
+        if not self.switch_role('admin'):
+            raise SomethingWrong
+
         params = {'postMassIds_grid': user_id, 'massActionsAll_grid': user_id}
-        self.request('/user/list/delete-by', params, 'post')
+        
         # успешно!
         is_ajax_request_value = self._session.headers.pop('IS_AJAX_REQUEST', None)
 
@@ -137,6 +143,26 @@ class LearningDriver:
             return True
         else:
             raise SomethingWrong(f"Something wrong on user {user_id} deleting: " + repr(msg))
+
+    def find_group_id(self, name: str) -> int|None:
+        self._auth_check()
+        
+        if not self.switch_role('dean'):
+            raise SomethingWrong
+
+        params = {
+            'gridmod': 'ajax', 'name': name, 'page': 1, 'perPage': -1
+        }
+        
+        resp = self.request('/study-groups/list/index/subject_id/0', params)
+        data = resp.get('data')
+        if not data: return None
+
+        for row in data:
+            row_name = HTMLParser(html.unescape(row['name'])).text().strip()
+            if row_name == name:
+                return int(row['group_id'])
+        return None
 
     def get_current_info(self):
         self._auth_check()
@@ -167,7 +193,34 @@ class LearningDriver:
     def get_current_roles(self) -> str:
         resp = self.get_current_info()
         return resp['roles'] if resp.get('roles') else dict()
-    
+
+    def get_group_members(self, group_id, email_filter: List[str] = []) -> List[Tuple[int, str]]:
+        """ Returns group members in list like [(user_id, user_email), ...]
+            email_filter: list of emails in return list
+        """
+        self._auth_check()
+        if not self.switch_role('dean'):
+            raise SomethingWrong
+        
+        params = {
+            'gridmod': 'ajax', 'grid': 'grid',
+            'page': 1, 'perPage': -1
+        }
+
+        result = []
+        is_email_filter = bool(email_filter)
+        email_filter = [str(x).lower() for x in email_filter]
+        resp = self.request(f"/study-groups/users/index/group_id/{group_id}", params=params)
+        data = resp.get('data')
+        if not data: return result
+
+        for row in data:
+            if is_email_filter:
+                if row['email'].lower() not in email_filter:
+                    continue
+            result.append((int(row['MID']), row['email']))
+        return result
+
     def get_log_message(self, log_id) -> str | None:
         """ Returns html-like str if message found, else None """
         if not log_id: return None
@@ -211,6 +264,9 @@ class LearningDriver:
         """ Returns user courses """
         
         self._auth_check()
+        
+        if not self.switch_role('admin'):
+            raise SomethingWrong
 
         params = {
             'gridmod': 'ajax', 'grid': 'grid',
@@ -306,6 +362,9 @@ class LearningDriver:
                 Password, if found, else None
         """
         self._auth_check()
+
+        if not self.switch_role('admin'):
+            raise SomethingWrong
         
         params = {
             'gridmod': 'ajax', 'receiver_id': user_id,
@@ -352,7 +411,8 @@ class LearningDriver:
         self._auth_check()
 
         # Переключаемся на администратора
-        self.switch_role('admin')
+        if not self.switch_role('admin'):
+            raise SomethingWrong
 
         params = {
             'gridmod': 'ajax', 'grid': 'grid',
@@ -369,8 +429,39 @@ class LearningDriver:
     def logout(self):
         self.request('/logout')
 
+    def remove_from_group(self, group_id: str|int, user_id: str|int) -> bool:
+        """ Убрать пользователей из группы
+            Args:
+                group_id - идентификатор группы
+                user_id - идентификатор(ы) пользователя(ей)
+                            если несколько, то должны быть через запятую ("1,2,3")
+        """
+        self._auth_check()
+
+        if not self.switch_role('dean'):
+            raise SomethingWrong
+
+        params = {'postMassIds_grid': user_id, 'massActionsAll_grid': user_id}
+
+        # успешно!
+        is_ajax_request_value = self._session.headers.pop('IS_AJAX_REQUEST', None)
+        page = self.request(f"/study-groups/users/exclude/subject_id/0/group_id/{group_id}", params, 'post', format_='html')
+        if is_ajax_request_value:
+            self._session.headers.update({'IS_AJAX_REQUEST': is_ajax_request_value})
+        
+        msg = self.get_notification(page)
+
+        if "успешно" in msg:
+            return True
+        else:
+            raise SomethingWrong(f"Something wrong on user {user_id} removing from group {group_id}: " + repr(msg))
+
     def remove_tag(self, user_id, tag):
         self._auth_check()
+
+        if not self.switch_role('admin'):
+            raise SomethingWrong
+
         params = {
             'postMassIds_grid': user_id, 
             'massActionsAll_grid': user_id,
