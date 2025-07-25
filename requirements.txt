@@ -3,3 +3,4 @@ openpyxl==3.1.5
 rich==14.0.0
 requests
 selectolax
+pyperclip
