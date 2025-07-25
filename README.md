@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 Теперь можно запустить программу, используя python:
 ```
-python3 src/tui.py
+python src/tui.py
 # или python3 src/app.py --tui
 ```
 
