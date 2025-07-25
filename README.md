@@ -22,7 +22,7 @@
 ## Сборка
 
 ```
-git clone https://notabug.org/Weendx/elexam.git
+git clone https://github.com/Weendx/elexam.git
 cd elexam
 python -m venv venv
 
