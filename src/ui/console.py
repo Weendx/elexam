@@ -1000,6 +1000,6 @@ class Console(RichConsole):
         return uactions_return
 
     def test(self):
-        learning = self.create_learning()
-        print(learning.get_group_members(465, ['semernya94@bk.ru']))
+        pass
+
         
