@@ -204,6 +204,7 @@ class FileController:
                 if is_blue_color(fill.value): continue
                 if is_red_color(fill.value): continue
             email = row[cols['email']].value
+            if not email: continue
             user = ws_labels_users.get(email)
             if not user:
                 user = User(

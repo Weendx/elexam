@@ -548,14 +548,7 @@ class Console(RichConsole):
 
         learning = self.create_learning()
 
-        def group_name_input_validator(self, value):
-            with self.status("Проверка... "):
-                id_ = learning.find_group_id(value)
-            if id_ == None:
-                self.print(f"[red]Группа `{value}` не найдена")
-            return id_ != None
-
-        group_name = self.ask('[cyan]Введите название группы', lambda x: group_name_input_validator(self, x))
+        group_name = self.ask('[cyan]Введите название группы', self.validate_group_name)
         
         with self.status("Загрузка... "):
             group_id = learning.find_group_id(group_name)
@@ -578,7 +571,18 @@ class Console(RichConsole):
         _members = pluralize(users_len, ['участник', 'участника', 'участников'])
         self.print(f"[green]Из группы {group_name} {_excluded} {users_len} {_members}")
         input("Нажмите Enter чтобы продолжить... ")
-            
+
+    def run_action_remove_from_group_manually(self) -> None:
+        """ Итеративное удаление участников из группы + из файла """
+        learning = self.create_learning()
+        group_name = self.ask('[cyan]Введите название группы', self.validate_group_name)
+        with self.status("Загрузка... "):
+            group_id = learning.find_group_id(group_name)
+            users = learning.get_group_members(group_id)
+        self.print("[dim]Введите путь к файлу для включения его в работу. Иначе введите «!»")
+        filepath = self.ask_filepath(required=False, cache_suffix='group_csv')
+        
+
     def run_action_show_user_info(self) -> Optional[str]:
         emails = self.ask("Введите email").split(', ')
         if emails[0] == '!step1':
@@ -1002,4 +1006,10 @@ class Console(RichConsole):
     def test(self):
         pass
 
+    def validate_group_name(self, value):
+        with self.status("Проверка... "):
+            id_ = learning.find_group_id(value)
+        if id_ == None:
+            self.print(f"[red]Группа `{value}` не найдена")
+        return id_ != None
         
