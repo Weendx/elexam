@@ -508,11 +508,6 @@ class Console(RichConsole):
             print(Settings.get_filepath())
             return
         
-        if '--version' in sys.argv:
-            import version
-            print(Text(version.VERSION))
-            return
-
         try:
             learning = self.create_learning()
             with self.status("Загрузка... "):
