@@ -6,7 +6,7 @@ import html
 import requests
 import json
 from selectolax.parser import HTMLParser
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Dict
 import urllib
 import time
 from math import ceil
