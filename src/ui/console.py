@@ -4,6 +4,7 @@ import sys
 from sys import exit
 import datetime
 import traceback
+from time import sleep
 from typing import List, Tuple, Optional, Callable, Iterable
 
 from rich import print
@@ -61,6 +62,7 @@ class Console(RichConsole):
             menuitems.append(MenuItem('Получить информацию о пользователе (eLearning)', 'show_uinfo'))
             menuitems.append(MenuItem('Найти пароль пользователя (eLearning)', 'find_password'))
             menuitems.append(MenuItem('Убрать из группы (eLearning)', 'remove_from_group'))
+            menuitems.append(MenuItem('Получить пользователей из курса (eLearning)', 'get_users_from_course'))
         menuitems.append(MenuItem('Управление метками', 'manage_labels'))
         if logged:
             menuitems.append(MenuItem('Выйти из eLearning', 'logout'))
@@ -519,6 +521,52 @@ class Console(RichConsole):
         except EOFError:
             pass
 
+    def run_action_get_users_from_course(self, course_id=None, filepath=None) -> None:
+        """
+        Получить пользователей с курса в Excel с полями:
+        id в системе, логин, почта, Фамилия Имя Отчество (в одном), вуз, статус (студент), направление (архитектор) 
+        """
+        self.print("[yellow]Запись пользователей из курса в файл Excel\n")
+
+        learning = self.create_learning()
+
+        if not course_id:
+            course = self.ask("[cyan]Введите ссылку на курс")
+            course_parts = course.rsplit('/', maxsplit=1)
+            if len(course_parts) != 2 or str(course_parts[1]) != str(int(course_parts[1])):
+                self.print("[red] Некорректная ссылка на курс: не найден id курса")
+                return
+            course_id = int(course_parts[1])
+        if not filepath:
+            generated_filename = f"export_course_{course_id}_{datetime.datetime.today().strftime('%Y-%m-%d')}"
+            if os.path.isfile(generated_filename + ".xlsx"):
+                i = 1
+                while os.path.isfile(generated_filename + f"_{i}.xlsx"):
+                    i += 1
+                generated_filename += f"_{i}"
+            generated_filename += ".xlsx"
+            filepath = self.ask("[cyan]Введите путь, куда нужно сохранить файл", default=generated_filename)
+
+        perPage = 10
+
+        total_pages = learning.get_course_pages(course_id, perPage)
+        if not total_pages:
+            self.print("[red] В курсе нет участников либо курс не найден")
+            return
+        
+        for currentPage in self.gen_progress(range(1, total_pages + 1), title="Получение информации о пользователях..."):
+            users = learning.get_course_members(course_id, page=currentPage, perPage=perPage)
+            for k, user in enumerate(users):
+                sleep(0.01)
+                users[k] = user | learning.get_user_info_card(user['MID'])
+            
+            FileController.save_course_members(users, filepath)
+
+        self.print("[green]Обработка завершена. Файл с результатами сохранен по пути:")
+        self.print(f"[magenta]{os.path.abspath(filepath)}")
+
+        
+
     def run_action_remove_from_group(self) -> None:
         emails = []
 
@@ -779,6 +827,9 @@ class Console(RichConsole):
                 self.run_labels_menu()
             elif action == 'remove_from_group':
                 self.run_action_remove_from_group()
+            elif action == 'get_users_from_course':
+                print()
+                self.run_action_get_users_from_course()
             elif action == 'exit':
                 exit()
             _is_first_run = False

@@ -8,6 +8,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from time import sleep
 import traceback
 import re
+import os
 
 from excelDriver import ExcelDriver
 from label import LabelController
@@ -252,7 +253,35 @@ class FileController:
         driver.save()
         message_callback("Обработка файла завершена. Файл сохранен.")
 
+    @staticmethod
+    def save_course_members(data, filepath):
+        """ Сохраняет пользователей из Console.run_action_get_users_from_course
+            Дописывает в конец
+        """
 
+        is_file_exists = os.path.isfile(filepath)
+        driver = ExcelDriver()
+        if is_file_exists:
+            driver.load(filepath)
+        else:
+            driver.create_empty()
+            header = ["email", "ФИО", "ВУЗ", "Статус", "Назначение", "Дата регистрации", "eLearning ID", "login"]
+            header_size = [ 35, 42,    58,    20,      32,            20,                  13,             22   ]
+            driver.write_header(header, header_size)
 
-            
+        rows = []
+        for user in data:
+            rows.append([
+                user.get('email', ''),
+                user.get('fio', ''),
+                user.get('university', ''),
+                user.get('status', ''),
+                user.get('attachment', ''),
+                user.get('time_registered', ''),
+                user.get('MID', ''),
+                user.get('login', ''),
+            ])
+        
+        driver.append_rows(rows)
+        driver.save(filepath)
 

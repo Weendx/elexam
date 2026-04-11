@@ -9,6 +9,7 @@ from selectolax.parser import HTMLParser
 from typing import Tuple, List, Union
 import urllib
 import time
+from math import ceil
 
 from datatypes import AuthCookies, UserInfo, Course
 from utils import convert_date_string
@@ -221,6 +222,51 @@ class LearningDriver:
             result.append((int(row['MID']), row['email']))
         return result
 
+    def get_course_members(self, course_id, page=1, perPage=30) -> List[Dict]:
+        """ Returns list of users in course """
+
+        self._auth_check()
+        if not self.switch_role('dean'):
+            raise SomethingWrong
+        
+        params = {
+            'gridmod': 'ajax', 'grid': 'grid',
+            'page': page, 'perPage': perPage
+        }
+
+        result = []
+        
+        resp = self.request(f"/assign/student/index/subject_id/{course_id}", params=params)
+        data = resp.get('data')
+        if not data: return result
+
+        for row in data:
+            result.append({
+                'MID': int(row['MID']),
+                'fio': HTMLParser(html.unescape(row['fio'])).css_first('a').text(),
+                'time_registered': row['time_registered'],
+            })
+        return result
+
+    def get_course_pages(self, course_id, perPage=30):
+        """ Returns pages count """
+        
+        self._auth_check()
+        if not self.switch_role('dean'):
+            raise SomethingWrong
+
+        params = {
+            'gridmod': 'ajax', 'grid': 'grid',
+            'page': 1, 'perPage': perPage
+        }
+
+        resp = self.request(f"/assign/student/index/subject_id/{course_id}", params=params)
+        data = resp.get('tableSettings')
+        if not data: return 0
+
+        return ceil(data['totalRecords'] / data['pagination'])
+
+
     def get_log_message(self, log_id) -> str | None:
         """ Returns html-like str if message found, else None """
         if not log_id: return None
@@ -355,6 +401,32 @@ class LearningDriver:
         if not uinfo_return:
             raise UserNotFound
         return uinfo_return
+
+    def get_user_info_card(self, user_id) -> dict | None:
+        """ Get user info from card """
+        self._auth_check()
+
+        resp = self.request(f"/user/list/view/user_id/{user_id}", method='post')
+        if not resp: return None
+        
+        result = {
+            'fio': resp['title'],
+        }
+
+        keys_translate = {
+            'Логин': 'login',
+            'Email': 'email',
+            'Вуз': 'university',
+            'Статус': 'status',
+            'Должность/Академическая група ': 'attachment'
+        }
+
+        if resp.get('fields'):
+            for field in resp['fields']:
+                trkey = keys_translate.get(field['key'])
+                if trkey:
+                    result[trkey] = field['value']
+        return result
 
     def get_user_password(self, user_id) -> str | None:
         """ Try to get user password from eLearning 

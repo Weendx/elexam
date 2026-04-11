@@ -1,11 +1,11 @@
-from openpyxl import load_workbook
+from openpyxl import load_workbook, Workbook
 from openpyxl.comments import Comment
-from openpyxl.styles import PatternFill
+from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.worksheet.worksheet import Worksheet
 import os
 import re
 import errno
-from typing import List, Tuple, NamedTuple, Optional
+from typing import List, Tuple, NamedTuple, Optional, Iterable
 from copy import copy
 
 from datatypes import EmailNLogin, UserTableData, TableSubject
@@ -28,6 +28,20 @@ class ExcelDriver:
 
     _xlsx = None
     _filepath = None
+
+    def append_rows(self, rows: Iterable[Iterable], worksheet=None) -> bool:
+        self.check_loaded()
+        ws = worksheet if worksheet else self._xlsx.active
+
+        rows_count = len(rows)
+        if not rows_count: return False
+        cols_count = len(rows[0])
+        if not cols_count: return False
+        
+        for row in rows:
+            ws.append(row)
+        
+        return True
 
     def change_columns(self, email: str, changes: List[Tuple[str, str]]):
         """ Change values in columns
@@ -77,7 +91,7 @@ class ExcelDriver:
                 passw_cell.value = password
 
     def check_loaded(self):
-        if self._xlsx == None or self._filepath == None:
+        if self._xlsx == None:
             raise NotLoadedException()
 
     def clone_sheet(self, source_worksheet) -> Worksheet:
@@ -294,6 +308,9 @@ class ExcelDriver:
         for cell in password_column:
             cell.value = formula.replace('%i', str(cell.row))
 
+    def create_empty(self):
+        self._xlsx = Workbook()
+
     def load(self, filepath):
         if not os.path.isfile(filepath):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filepath)
@@ -310,6 +327,7 @@ class ExcelDriver:
         self.check_loaded()
         _filepath = filepath if filepath else self._filepath
         self._xlsx.save(_filepath)
+        self._filepath = _filepath
 
     def mark_user(self, worksheet, email, first_row_is_header=True, fgColor='FF558ED5'):
         """ Mark users who should not be registered by blue color """
@@ -347,3 +365,24 @@ class ExcelDriver:
                     cell.fill = fill
                     return True
         return False
+
+    def write_header(self, header: Iterable, cols_size: Optional[Iterable] = None, row_num=1, worksheet=None):
+        self.check_loaded()
+        ws = worksheet if worksheet else self._xlsx.active
+
+        header_len = len(header)
+        if cols_size and len(cols_size) != header_len:
+            raise ValueError("Length of 'cols_size' should be equal to 'header' length")
+
+        bold_font = Font(name='Calibri', bold=True)
+        center_alignment = Alignment(horizontal='center', vertical='center')
+
+        for row in ws.iter_rows(min_row=row_num, max_row=row_num, max_col=header_len):
+            for i, title in enumerate(header):
+                row[i].value = title
+                row[i].font = bold_font
+                row[i].alignment = center_alignment
+                if cols_size:
+                    ws.column_dimensions[row[i].column_letter].width = cols_size[i]
+
+
