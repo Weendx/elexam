@@ -77,7 +77,7 @@ class LabelController:
         return base64.b64encode(bytes(json_str, 'ascii'))
     
     @classmethod
-    def get_label(cls, exam_subject: str, selected_date: datetime.date | None = None) -> str:
+    def get_label(cls, exam_subject: str, selected_date: datetime.date | None = None, by_month: bool = False) -> str:
         """Определеяет метку для экзамена (с ближайшим блоком)
 
         Экзамен переносится на следующий блок, если до экзамена один день
@@ -87,6 +87,8 @@ class LabelController:
         :type exam_subject: str
         :param selected_date: Выбранная дата сдачи экзамена
         :type selected_date: datetime.date
+        :param by_month: Определить дату по месяцу в selected_date
+        :type by_month: bool
         :raises NoSuitableLabelFound: Если метка не определена
         :returns: Возвращает метку для экзамена (с блоком)
         :rtype: str
@@ -95,6 +97,7 @@ class LabelController:
         cls.load_exams()
 
         ##
+        by_month = True if selected_date.year == 2001 and by_month == False else by_month
         current_date = datetime.date.today()
         current_year = current_date.year
         current_date = current_date.replace(year=2000)
@@ -109,10 +112,12 @@ class LabelController:
             for date_i, date in enumerate(exam.dates):
                 if selected_date == date:
                     return f"{exam.tag}{current_year}{date_i+1}"
+                elif by_month and selected_date and selected_date.month == date.month:
+                    return f"{exam.tag}{current_year}{date_i+1}"
                 elif selected_date == None and current_date < date - day:
                     return f"{exam.tag}{current_year}{date_i+1}"
 
-        raise NoSuitableLabelFound(f"exam_subject={exam_subject}, selected_date={selected_date}")
+        raise NoSuitableLabelFound(f"exam_subject={exam_subject}, selected_date={selected_date}, by_month={by_month}")
 
     @classmethod
     def get_label_primitive(cls, exam_subject: str) -> Label:

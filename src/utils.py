@@ -35,6 +35,12 @@ def pluralize(number, forms):
 
 def convert_date_string(datetime_string: str) -> Union[datetime, None]:
         if not datetime_string: return None
+        
+        months = ["июнь", "июль", "август"]
+        if datetime_string in months:
+            month = months.index(datetime_string) + 6
+            return datetime(2001, month, 1)
+
         formats = ["%d.%m.%Y %H:%M:%S", "%d.%m.%Y", "%Y-%m-%d %H:%M:%S"]
         for fmt in formats:
             try:
@@ -138,7 +144,7 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
             for subject in uinfo.table.subjects:
                 try:
                     # label = str(LabelController.get_label_primitive(subject))
-                    selected_date = subject.date.date() if type(subject.date) == datetime else None
+                    selected_date = convert_date_string(subject.date) if subject.date else None
                     label = LabelController.get_label(subject.name, selected_date=selected_date)
                     if not uinfo.tags or (uinfo.tags and label not in uinfo.tags):
                         suggestions.append(UserAction(UserActionType.ADD_LABEL, label))

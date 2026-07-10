@@ -35,7 +35,8 @@ from datatypes import (
 from utils import (
     pluralize, get_mock_user, 
     suggest_user_actions, 
-    copy_to_clipboard, generate_password
+    copy_to_clipboard, generate_password,
+    convert_date_string
 )
 
 
@@ -880,7 +881,9 @@ class Console(RichConsole):
                             label = LabelController.get_label(subject)
                         else:
                             date_parts = date.split('.')
-                            label = LabelController.get_label(subject, datetime.date(2000, int(date_parts[1]), int(date_parts[0])))
+                            if date.count('.') == 1:
+                                date += '.2000'
+                            label = LabelController.get_label(subject, convert_date_string(date))
                         self.print("[magenta]>> Метка:", label)
                     except NoSuitableLabelFound:
                         self.print("[magenta]>> Метка не найдена")
