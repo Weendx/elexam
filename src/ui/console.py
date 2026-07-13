@@ -883,7 +883,7 @@ class Console(RichConsole):
                             date_parts = date.split('.')
                             if date.count('.') == 1:
                                 date += '.2000'
-                            label = LabelController.get_label(subject, convert_date_string(date))
+                            label = LabelController.get_label(subject, convert_date_string(date).date())
                         self.print("[magenta]>> Метка:", label)
                     except NoSuitableLabelFound:
                         self.print("[magenta]>> Метка не найдена")

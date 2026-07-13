@@ -144,7 +144,7 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
             for subject in uinfo.table.subjects:
                 try:
                     # label = str(LabelController.get_label_primitive(subject))
-                    selected_date = convert_date_string(subject.date) if subject.date else None
+                    selected_date = convert_date_string(str(subject.date)).date() if subject.date else None
                     label = LabelController.get_label(subject.name, selected_date=selected_date)
                     if not uinfo.tags or (uinfo.tags and label not in uinfo.tags):
                         suggestions.append(UserAction(UserActionType.ADD_LABEL, label))

@@ -97,7 +97,7 @@ class LabelController:
         cls.load_exams()
 
         ##
-        by_month = True if selected_date.year == 2001 and by_month == False else by_month
+        by_month = True if selected_date and selected_date.year == 2001 and by_month == False else by_month
         current_date = datetime.date.today()
         current_year = current_date.year
         current_date = current_date.replace(year=2000)
