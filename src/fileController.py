@@ -2,13 +2,11 @@
 #                           а операцию обработки файла в целом
 
 from collections import namedtuple
-import datetime
-from typing import List
-from openpyxl.worksheet.worksheet import Worksheet
-from time import sleep
+from typing import Callable, Iterable, List, Optional
 import traceback
 import re
 import os
+from time import sleep
 
 from excelDriver import ExcelDriver
 from label import LabelController
@@ -22,8 +20,65 @@ from settings import Settings
 
     
 class FileController:
+    # Небольшая пауза между запросами защищает связанный сервис от всплесков
+    # нагрузки при обработке больших таблиц.
+    REQUEST_DELAY_SECONDS = 0.05
+    USER_SELECTION_DELAY_SECONDS = 1.5
+
     @staticmethod
-    def step1(filepath, progress_gen, ask_user_actions, confirm_users_actions, message_callback):
+    def _prepare_workbook(xlsx: ExcelDriver, filepath: str):
+        xlsx.load(filepath)
+
+        worksheet = xlsx.get_first_worksheet()
+        xlsx.remove_other_sheets(worksheet)
+        xlsx.save()
+
+        # openpyxl keeps references to removed worksheets, so reopen the file
+        # before creating the working copies.
+        xlsx.load(filepath)
+        worksheet = xlsx.get_first_worksheet()
+        worksheet.title = "Общий"
+        xlsx.insert_passwords(worksheet)
+
+        labels_worksheet = xlsx.clone_sheet(worksheet)
+        labels_worksheet.title = "Для предметов и меток"
+        return labels_worksheet
+
+    @staticmethod
+    def _find_existing_users(
+            user_table_data: Iterable,
+            learning: LearningDriver,
+            progress_gen: Callable,
+            sleep_func: Callable[[float], None],
+    ) -> list[UserInfo]:
+        users = []
+        progress = progress_gen(user_table_data, title="Поиск пользователей...")
+
+        for table_user in progress:
+            sleep_func(FileController.REQUEST_DELAY_SECONDS)
+            try:
+                matched_users = learning.get_user_info(table_user.email)
+            except UserNotFound:
+                continue
+
+            for user_info in matched_users:
+                user_info.table = table_user
+                users.append(user_info)
+
+        return users
+
+    @staticmethod
+    def step1(
+            filepath: str,
+            progress_gen: Callable,
+            ask_user_actions: Callable,
+            confirm_users_actions: Callable,
+            message_callback: Callable,
+            *,
+            learning: Optional[LearningDriver] = None,
+            xlsx: Optional[ExcelDriver] = None,
+            sleep_func: Callable[[float], None] = sleep,
+    ) -> bool:
         """ Обработка файла часть 1
             Args:
                 filepath (str): Путь к excel файлу
@@ -34,54 +89,34 @@ class FileController:
                 confirm_user_actions (Callable): Callback для подтверждения действий
                 message_callback (Callable): Callback для отправки сообщений
         """
-        learning = LearningDriver(AuthCookies(*Settings().get_crypted('auth')))
-        xlsx = ExcelDriver()
-        xlsx.load(filepath)
-        
-        # Очистка лишних листов
-        ws_general = xlsx.get_first_worksheet()
-        xlsx.remove_other_sheets(ws_general)
-        xlsx.save()
-        
-        # Перезагрузка
-        xlsx.load(filepath)
-        ws_general = xlsx.get_first_worksheet()
+        if learning is None:
+            auth = Settings().get_crypted('auth')
+            learning = LearningDriver(AuthCookies(*auth) if auth else None)
+        if xlsx is None:
+            xlsx = ExcelDriver()
 
-        # Лист 'Общий' или 'Лист1'
-        ws_general.title = 'Общий'
-        xlsx.insert_passwords(ws_general)
-
-        # Лист 'Для предметов и меток'
-        ws_labels = xlsx.clone_sheet(ws_general)
-        ws_labels.title = 'Для предметов и меток'
+        ws_labels = FileController._prepare_workbook(xlsx, filepath)
 
         # Обработка пользователей
         user_table_data = xlsx.get_all_users_data()
-        users_exists = list() # все зарегистрированные пользователи
-        for table_user in progress_gen(user_table_data, title="Поиск пользователей..."):
-            sleep(0.05)
-
-            try:
-                # list, тк по одному email может быть несколько пользователей
-                uinfo_list = learning.get_user_info(table_user.email)
-            except UserNotFound:
-                continue
-
-            for uinfo in uinfo_list:
-                uinfo.table = table_user
-                users_exists.append(uinfo)
+        users_exists = FileController._find_existing_users(
+            user_table_data,
+            learning,
+            progress_gen,
+            sleep_func,
+        )
         
         # Отправка сообщения о завершении загрузки пользователей
         _t1 = len(user_table_data)
         _t2 = len(users_exists)
-        _t3 = round(_t2 / _t1 * 100, 2)
+        _t3 = round(_t2 / _t1 * 100, 2) if _t1 else 0
         message_callback(f"Найдено {_t2}/{_t1} ({_t3}%) пользователей", status="info")
         
         if not _t2:
             message_callback(f"Зарегистрированных пользователей нет.", status="info")
         else:
             message_callback(f"Выберите действия для найденных пользователей...")
-            sleep(1.5)
+            sleep_func(FileController.USER_SELECTION_DELAY_SECONDS)
 
             # Выбор судьбы пользователей
             user_actions = list() # список действий над пользователями
@@ -94,7 +129,7 @@ class FileController:
             users_actions_confirmed = confirm_users_actions(user_actions)
             if not users_actions_confirmed:
                 message_callback("Обработка прервана.", status='bad')
-                return
+                return False
 
             # Реализация судьбы пользователей
             for user_action in progress_gen(user_actions, title="Выполнение действий..."):
@@ -113,6 +148,7 @@ class FileController:
         xlsx.clone_sheet_unique(ws_copy=ws_labels, ws_paste=ws_logins, unique_column_name='email')
         xlsx.save()
         message_callback("Обработка пользователей завершена. Файл сохранён.")
+        return True
 
     @staticmethod
     def progresstest(callback):
@@ -169,8 +205,13 @@ class FileController:
             uact.completed = True
 
     @staticmethod
-    def step2(filepath, message_callback):
-        driver = ExcelDriver()
+    def step2(
+            filepath: str,
+            message_callback: Callable,
+            driver: Optional[ExcelDriver] = None,
+    ) -> bool:
+        if driver is None:
+            driver = ExcelDriver()
         driver.load(filepath)
         
         if not 'Для предметов и меток' in driver._xlsx.sheetnames:
@@ -252,15 +293,21 @@ class FileController:
         
         driver.save()
         message_callback("Обработка файла завершена. Файл сохранен.")
+        return True
 
     @staticmethod
-    def save_course_members(data, filepath):
+    def save_course_members(
+            data: Iterable[dict],
+            filepath: str,
+            driver: Optional[ExcelDriver] = None,
+    ) -> None:
         """ Сохраняет пользователей из Console.run_action_get_users_from_course
             Дописывает в конец
         """
 
         is_file_exists = os.path.isfile(filepath)
-        driver = ExcelDriver()
+        if driver is None:
+            driver = ExcelDriver()
         if is_file_exists:
             driver.load(filepath)
         else:
@@ -284,4 +331,3 @@ class FileController:
         
         driver.append_rows(rows)
         driver.save(filepath)
-

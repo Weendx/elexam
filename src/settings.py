@@ -27,7 +27,7 @@ class Settings:
         decoded = decode("&(gsUDH)ds3@", value)
         try:
             return json.loads(decoded)
-        except:
+        except json.JSONDecodeError:
             return decoded
 
     @classmethod
@@ -87,4 +87,3 @@ class Settings:
         if not key in self.__class__._data: return
         self.__class__._data.__delitem__(key)
         self.write(self.__class__._data)
-

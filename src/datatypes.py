@@ -144,7 +144,7 @@ class UserTableData(NamedTuple):
     email: str
     login: str
     fio: Optional[str] = None
-    subjects: List[TableSubject] = []
+    subjects: Optional[List[TableSubject]] = None
 
 @dataclass
 class UserInfo:
@@ -158,4 +158,3 @@ class UserInfo:
     last_login: Optional[datetime.datetime] = None
     courses: Optional[Tuple[Course]] = None
     source: Optional[str] = 'elexam'
-

@@ -467,7 +467,7 @@ class LearningDriver:
                     password = password[9:]  # ex: '1JXM.'
                     password = password[:-1]  # ex: '1JXM'
                     return password
-                except:
+                except Exception:
                     return None
             elif 'Изменение пароля' in theme:
                 try:
@@ -475,7 +475,7 @@ class LearningDriver:
                     for p in p_list:
                         if 'Новый пароль: ' in p.text():  # ex: 'Новый пароль: el_6rBOw'
                             return p.text()[14:]  # ex: '1JXM'
-                except:
+                except Exception:
                     return None
         return None
 
@@ -543,7 +543,9 @@ class LearningDriver:
         # response is dumb
         self.request('/user/list/unassign-tag', params, 'post')
 
-    def request(self, endpoint, params={}, method='get', headers=None, format_="json"):
+    def request(self, endpoint, params=None, method='get', headers=None, format_="json"):
+        if params is None:
+            params = {}
         try:
             if method == 'get':
                 query = '?' + urllib.parse.urlencode(params) if not '?' in endpoint else ''

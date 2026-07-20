@@ -118,7 +118,7 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
                     if learning:
                         try:
                             password = learning.get_user_password(uinfo.mid)
-                        except:
+                        except Exception:
                             pass
 
                     if password != "<Неизвестно>":
@@ -133,7 +133,7 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
                         ):
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_LOCAL, password))
                     else:
-                        password = generate_password(user.table.login)
+                        password = generate_password(uinfo.table.login)
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_EDU, password))
                         suggestions.append(UserAction(UserActionType.CHANGE_PASSW_LOCAL, password))
                 ##

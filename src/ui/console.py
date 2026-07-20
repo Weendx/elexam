@@ -130,6 +130,19 @@ class Console(RichConsole):
         self.print(self.compose_exams_table(exams))
         return self.ask_int("Введите номер", 1, len(exams))
 
+    @staticmethod
+    def _parse_exam_dates(value: str) -> List[datetime.date]:
+        dates = []
+        for item in value.split(','):
+            item = item.strip()
+            if item == '-':
+                dates.append(datetime.date(2000, 1, 1))
+                continue
+
+            day, month = item.split('.')
+            dates.append(datetime.date(2000, int(month), int(day)))
+        return dates
+
     def ask_exam_params(self, exam: Optional[Exam] = None) -> Exam:
         subject = exam.subject if exam else None
         tag = exam.tag if exam else None
@@ -138,27 +151,21 @@ class Console(RichConsole):
         subject = self.ask("[cyan]Введите название[/cyan] [dim](предмет)[/dim]", default=subject)
         tag = self.ask("[cyan]Введите метку[/cyan] [dim](без года и номера блока)[/dim]", default=tag)
         
-        new_dates = list()
         self.print("\n[cyan]Введите даты проведения экзамена:")
         self.print("  [dim]ДД.ММ, через запятую без пробела.")
         self.print("  [dim]Номер блока будет определяться в соответствии порядку записи дат.")
         self.print("  [dim]Если в блоке экзамена нет, введите «-»")
         self.print(Text("  Пример: 18.06,-,20.08", style="dim"))
-        reexp = re.compile('^((([0-9]{2}\\.[0-9]{2})|(-)),{0,1})+$')
+        date_pattern = re.compile(r"(?:(?:\d{2}\.\d{2})|-)(?:,(?:(?:\d{2}\.\d{2})|-))*")
         while True:
             _dates = self.ask("[cyan]Ввод", default=dates)
-            if not reexp.match(_dates): continue
+            if not date_pattern.fullmatch(_dates):
+                continue
             try:
-                input_dates = _dates.split(',')
-                for input_date in input_dates:
-                    if input_date == '-':
-                        new_dates.append(datetime.date(2000, 1, 1))
-                        continue
-                    date_parts = input_date.split('.')
-                    new_dates.append(datetime.date(year=2000, month=int(date_parts[1]), day=int(date_parts[0])))
+                new_dates = self._parse_exam_dates(_dates)
                 break
-            except:
-                continuraisee
+            except ValueError:
+                continue
 
         return Exam(subject, tag, new_dates)
 
@@ -412,7 +419,7 @@ class Console(RichConsole):
                 try:
                     copy_to_clipboard(emails)
                     self.print("[green]Адреса email скопированы в буфер!")
-                except:
+                except Exception:
                     self.print("[red]Не получается скопировать данные в буфер :(")
 
     @classmethod
@@ -422,7 +429,7 @@ class Console(RichConsole):
         if ac_list:
             try:
                 ac = AuthCookies(*ac_list)
-            except:
+            except (TypeError, ValueError):
                 pass
         return LearningDriver(auth_cookies=ac)
 
@@ -749,11 +756,61 @@ class Console(RichConsole):
                     with self.status("Выполнение... "):
                         FileController.perform_user_actions(driver, learning, uinfo, uactions)
                     self.print("[green]Действия выполнены")
-                except:
+                except Exception:
                     self.message_callback(traceback.format_exc(), status="info")
                     self.message_callback('Не удалось выполнить действия', 'bad')
                     self.message_callback(uactions, status='info')
         ##
+
+    def run_action_process_file_1(self) -> bool:
+        """Run the first Excel-processing stage.
+
+        Returns True when authentication state changed and the main menu must
+        be rebuilt.
+        """
+        filepath = self.ask_filepath()
+
+        confirmed = Confirm.ask(
+            "[red]Данные в файле будут изменены или удалены. Продолжить?"
+        )
+        if not confirmed:
+            return False
+
+        try:
+            FileController.step1(
+                filepath=filepath,
+                progress_gen=self.gen_progress,
+                ask_user_actions=lambda *args, **kwargs: self.select_user_actions(
+                    *args,
+                    abilities=("learning", "excel"),
+                    add_top_gap=True,
+                    **kwargs,
+                ),
+                confirm_users_actions=self.confirm_users_actions,
+                message_callback=self.message_callback,
+            )
+        except RequestError as error:
+            self.print("\n[bold red]Ошибка запроса.[/bold red] Текст ошибки:\n")
+            self.print(error)
+            exit()
+        except NotAuthorized:
+            self.print(
+                "\n[red]Сессия устарела. Необходимо пройти аутентификацию ещё раз"
+            )
+            del Settings()[self.AUTHCOOKIEID]
+            return True
+
+        return False
+
+    def run_action_process_file_2(self) -> None:
+        filepath = self.ask_filepath()
+        FileController.step2(filepath, self.message_callback)
+
+    def run_action_logout(self) -> None:
+        learning = self.create_learning()
+        with self.status("Выход из системы... "):
+            learning.logout()
+            del Settings()[self.AUTHCOOKIEID]
 
     def run_menu(self):
 
@@ -775,32 +832,10 @@ class Console(RichConsole):
                 self.elearning_auth_check()
                 menu, menuitems, menuitems_len = self._create_menu()  # update menu
             elif action == 'process_file_1':
-                filepath = self.ask_filepath()
-                
-                confirm = Confirm.ask("[red]Данные в файле будут изменены или удалены. Продолжить?")
-                if not confirm: 
-                    _is_first_run = False
-                    continue
-
-                try:
-                    FileController.step1(
-                        filepath=filepath, 
-                        progress_gen=self.gen_progress,
-                        ask_user_actions=lambda *args, **kwargs: self.select_user_actions(*args, abilities=('learning', 'excel'), add_top_gap=True, **kwargs),
-                        confirm_users_actions=self.confirm_users_actions,
-                        message_callback=self.message_callback
-                    )
-                except RequestError as e:
-                    self.print("\n[bold red]Ошибка запроса.[/bold red] Текст ошибки:\n")
-                    self.print(e)
-                    exit()
-                except NotAuthorized:
-                    self.print("\n[red]Сессия устарела. Необходимо пройти аутентификацию ещё раз")
-                    del Settings()[self.AUTHCOOKIEID]
+                if self.run_action_process_file_1():
                     menu, menuitems, menuitems_len = self._create_menu()  # update menu
             elif action == 'process_file_2':
-                filepath = self.ask_filepath()
-                FileController.step2(filepath, self.message_callback)
+                self.run_action_process_file_2()
             elif action == 'show_uinfo':
                 msg = self.run_action_show_user_info()
                 if msg == "rerender menu":
@@ -819,11 +854,8 @@ class Console(RichConsole):
                 if passw: self.print('[blue]' + passw)
                 else: self.print('[magenta]Пароль не найден')
             elif action == 'logout':
-                learning = self.create_learning()
-                with self.status("Выход из системы... "):
-                    learning.logout()
-                    del Settings()[self.AUTHCOOKIEID]
-                    menu, menuitems, menuitems_len = self._create_menu()  # update menu
+                self.run_action_logout()
+                menu, menuitems, menuitems_len = self._create_menu()  # update menu
             elif action == 'manage_labels':
                 self.run_labels_menu()
             elif action == 'remove_from_group':
@@ -903,13 +935,6 @@ class Console(RichConsole):
                         choices=['!', 'p'], show_choices=False
                     )
                     match selection:
-                        case 'c':
-                            try:
-                                copy_to_clipboard(share_string)
-                                self.print("[green]Скопировано!")
-                            except:
-                                self.print("[red]Не удалось скопировать :(")
-                            input("Нажмите Enter чтобы продолжить...")
                         case 'p':
                             filepath = self.ask_filepath(cache_suffix='share_labels')
                             self.print("[blue]Загрузка строки обмена... ")
@@ -918,15 +943,16 @@ class Console(RichConsole):
                                 share_bytes = file.read()
                             try:
                                 LabelController.load_exams_from_share_bytes(share_bytes)
-                            except:
+                            except Exception:
                                 self.print("[red]Возникла ошибка при разборе файла обмена")
                                 raise
                             self.print("[green]Загрузка данных из файла обмена завершена.")
 
                 case 'exit': return
 
-    def select_user_actions(self, uinfo, suggested: List[UserAction]=[], 
+    def select_user_actions(self, uinfo, suggested: Optional[List[UserAction]] = None,
             abilities: Iterable = (), add_top_gap=False) -> List[UserAction]:
+        suggested = list(suggested) if suggested is not None else []
         selection = None
         detailed_view = False
         is_first_run = True
