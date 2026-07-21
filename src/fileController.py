@@ -175,6 +175,10 @@ class FileController:
                 learning.delete(uinfo.mid)
             elif uact == UserActionType.DELETE_FROM_TABLE:
                 xlsx.delete_user_from_workbook(uinfo.table.email)
+                xlsx_changed = True
+            elif uact == UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT:
+                xlsx.delete_user_from_workbook(uinfo.table.email, subject=uact.param)
+                xlsx_changed = True
             elif uact == UserActionType.ADD_LABEL:
                 learning.add_tag(uinfo.mid, uact.param)
             elif uact == UserActionType.REMOVE_LABEL:
@@ -223,7 +227,7 @@ class FileController:
         ws_labels_users = {}
         ws_labels_style = {}
         cols = {
-            'email': driver.get_column_by_name(ws_labels, 'email') - 1,
+            'email': driver.get_email_column_id(ws_labels) - 1,
             'surname': driver.get_column_by_name(ws_labels, 'ФИО') - 1,
             'name': driver.get_column_by_name(ws_labels, 'ФИО') + 1 - 1,
             'patronymic': driver.get_column_by_name(ws_labels, 'ФИО') + 2 - 1,

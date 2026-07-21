@@ -34,6 +34,7 @@ class UserActionType(Enum):
     SKIP = 'skip'
     DELETE = 'delete'
     DELETE_FROM_TABLE = 'delete_from_table'
+    DELETE_FROM_TABLE_WITH_SUBJECT = 'delete_from_table_with_subject'
     ADD_LABEL = 'add_label'
     REMOVE_LABEL = 'remove_label'
     CHANGE_LOGIN = 'change_login'
@@ -59,7 +60,8 @@ class UserAction(metaclass=UserActionMeta):
         param_required = (
             UserActionType.ADD_LABEL, UserActionType.REMOVE_LABEL,
             UserActionType.SET_COMMENT,
-            UserActionType.CHANGE_PASSW_EDU, UserActionType.CHANGE_PASSW_LOCAL
+            UserActionType.CHANGE_PASSW_EDU, UserActionType.CHANGE_PASSW_LOCAL,
+            UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT
         )
 
         if not param and action in param_required:
@@ -73,9 +75,11 @@ class UserAction(metaclass=UserActionMeta):
 
         match action:
             case UserActionType.DELETE: self.weight = 100
+            case UserActionType.DELETE_FROM_TABLE: self.weight = 99
             case UserActionType.SET_COMMENT: self.weight = 90
+            case UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT: self.weight = 87
             case UserActionType.MARK_REGISTERED: self.weight = 85
-            case UserActionType.SKIP: self.weight = 85
+            case UserActionType.SKIP: self.weight = 86
             case UserActionType.CHANGE_LOGIN: self.weight = 10
             case UserActionType.CHANGE_PASSW_EDU: self.weight = 11
             case UserActionType.CHANGE_PASSW_LOCAL: self.weight = 20
@@ -84,6 +88,7 @@ class UserAction(metaclass=UserActionMeta):
             case UserActionType.SKIP: self.requires = ('excel')
             case UserActionType.DELETE: self.requires = ('learning')
             case UserActionType.DELETE_FROM_TABLE: self.requires = ('excel')
+            case UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT: self.requires = ('excel')
             case UserActionType.ADD_LABEL: self.requires = ('learning', 'excel')
             case UserActionType.REMOVE_LABEL: self.requires = ('learning')
             case UserActionType.CHANGE_LOGIN: self.requires = ('learning', 'excel')
@@ -126,6 +131,7 @@ class UserAction(metaclass=UserActionMeta):
         if self.action == UserActionType.SKIP: return "Пропустить с пометкой в таблице"
         elif self.action == UserActionType.DELETE: return "Удалить пользователя"
         elif self.action == UserActionType.DELETE_FROM_TABLE: return "Удалить пользователя из таблицы"
+        elif self.action == UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT: return f"Удалить пользователя из таблицы по предмету <[dodger_blue3]{self.param}[/dodger_blue3]>"
         elif self.action == UserActionType.ADD_LABEL: return f"Добавить метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
         elif self.action == UserActionType.REMOVE_LABEL: return f"Убрать метку <[dodger_blue3]{self.param}[/dodger_blue3]>"
         elif self.action == UserActionType.CHANGE_LOGIN: return "Записать в таблицу логин из eLearning"
@@ -145,6 +151,7 @@ class UserTableData(NamedTuple):
     login: str
     fio: Optional[str] = None
     subjects: Optional[List[TableSubject]] = None
+    marks: Optional[List[str]] = None  # отметки заливкой, по типу "зарегистрирован"
 
 @dataclass
 class UserInfo:

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Union, List
+from typing import Union, List, Optional
 import secrets
 import string
 import pyperclip
@@ -141,16 +141,30 @@ def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
 
         if uinfo.table.subjects:
             appended = False
+            to_delete = []
+
             for subject in uinfo.table.subjects:
                 try:
                     # label = str(LabelController.get_label_primitive(subject))
                     selected_date = convert_date_string(str(subject.date)).date() if subject.date else None
                     label = LabelController.get_label(subject.name, selected_date=selected_date)
+
                     if not uinfo.tags or (uinfo.tags and label not in uinfo.tags):
                         suggestions.append(UserAction(UserActionType.ADD_LABEL, label))
                         appended = True
+                    elif not (uinfo.table.marks and 'registered' in uinfo.table.marks):
+                        to_delete.append(UserAction(UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT, subject.name))
+
                 except LabelControllerError:
                     print("\n\033[31mSUGGESTION ERROR: Cannot get label for subject", subject, "\033[0m")
+            
+            if len(to_delete) == len(uinfo.table.subjects):
+                suggestions.append(UserAction(UserActionType.DELETE_FROM_TABLE))
+            elif to_delete: 
+                for suggestion in to_delete:
+                    suggestions.append(suggestion)
+                appended = True
+
             if appended:
                 suggestions.append(UserAction(UserActionType.MARK_REGISTERED))
     
@@ -193,3 +207,13 @@ def is_red_color(hex_color: str) -> bool:
     min_delta = 125
 
     return red > blue and red > green and red - blue > min_delta and red - green > min_delta
+
+def is_array_consecutive(array) -> bool:
+    """ Проверка, что list/tuple содержит последовательные элементы : [1,2,3] """
+    if not array:
+        return True
+    if len(array) == 1:
+        return True
+    a = sorted(array)
+    return all(a[i] + 1 == a[i+1] for i in range(len(a)-1))
+

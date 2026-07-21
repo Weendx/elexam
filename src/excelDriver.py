@@ -1,6 +1,7 @@
 from openpyxl import load_workbook, Workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 import os
 import re
@@ -9,8 +10,12 @@ from typing import List, Tuple, NamedTuple, Optional, Iterable
 from copy import copy
 
 from datatypes import EmailNLogin, UserTableData, TableSubject
-from utils import convert_date_string
+from utils import convert_date_string, is_array_consecutive, is_blue_color, is_red_color
 
+
+COLOR_FILL_REGISTERED = 'FF558ED5'
+COLOR_FILL_SKIPPED = 'FFFF3838'
+COLOR_FILL_COMMENT = 'FFA9D08E'
 
 class NotLoadedException(Exception):
     pass
@@ -43,7 +48,8 @@ class ExcelDriver:
         
         return True
 
-    def apply_row_style(self, worksheet, row, style):
+    @classmethod
+    def apply_row_style(cls, worksheet, row, style):
         """ Update style of the first 9th cells in the row """
         
         styles = ["fill", "font", "border", "number_format", "protection", "alignment"]
@@ -61,7 +67,7 @@ class ExcelDriver:
         self.check_loaded()
 
         for ws in self._xlsx:
-            email_col = self.get_column_by_name(ws, 'email')
+            email_col = self.get_email_column_id(ws)
             column_numbers = dict()
 
             for change in changes:
@@ -85,7 +91,7 @@ class ExcelDriver:
             ws = self._xlsx[sheetname]
 
             try:
-                email_col = self.get_column_by_name(ws, 'email')
+                email_col = self.get_email_column_id(ws)
                 login_col = self.get_column_by_name(ws, 'логин')
                 passw_col = self.get_column_by_name(ws, 'пароль')
             except ColumnNotFoundException:
@@ -111,7 +117,7 @@ class ExcelDriver:
     def clone_sheet_unique(self, ws_copy, ws_paste, unique_column_name) -> None:
         """ Copy data from ws_copy to ws_paste (unique) """
         unique_column = self.get_column_by_name(ws_copy, unique_column_name)
-        email_column = self.get_column_by_name(ws_copy, 'email')
+        email_column = self.get_email_column_id(ws_copy)
         password_column = self.get_column_by_name(ws_copy, 'пароль')
         password_formula = self.get_password_formula()
 
@@ -143,27 +149,66 @@ class ExcelDriver:
         self.check_loaded()
         return self._xlsx.create_sheet(*args, **kwargs)
 
-    def delete_user_from_workbook(self, email: str) -> None:
+    def delete_rows(self, worksheet: Worksheet, row: int, amount=1) -> None:
+        """ Delete rows with formula translation for cells shifted up. """
         self.check_loaded()
+        if amount < 1 or row > worksheet.max_row:
+            return
+
+        max_row = worksheet.max_row
+        max_column = worksheet.max_column
+        amount = min(amount, max_row - row + 1)
+        first_moved_row = row + amount
+        if first_moved_row <= max_row:
+            worksheet.move_range(
+                f'A{first_moved_row}:{get_column_letter(max_column)}{max_row}',
+                rows=-amount,
+                translate=True,
+            )
+        worksheet.delete_rows(max_row - amount + 1, amount)
+
+    def delete_row(self, worksheet: Worksheet, row: int) -> None:
+        self.delete_rows(worksheet, row)
+
+    def delete_user_from_workbook(self, email: str, subject: Optional[str] = None) -> None:
+        self.check_loaded()
+
+        general_worksheet = self._xlsx["Общий"]
+        rows_in_general_list = self.get_rows_with_user(general_worksheet, email)
+
         for worksheet in self._xlsx:
-            email_column = self.get_column_by_name(worksheet, 'email')
-            for row in worksheet.iter_cols(min_col=email_column, max_col=email_column):
-                for cell in row:
-                    if cell.value != email:
-                        continue
-                    # worksheet.delete_rows(cell.row)
-                    # worksheet.move_range(f'A{cell.row}:A{cell.row}', rows=-1, translate=True)
-                    for cell_range in worksheet.iter_rows(min_row=cell.row, max_row=cell.row, max_col=9):
-                        for cell_from_range in cell_range:
-                            cell_from_range.value = None
-                    cell.value = "<deleted>"
+            if not subject and worksheet == general_worksheet:
+                rows = rows_in_general_list
+            else:
+                rows = self.get_rows_with_user(worksheet, email, subject=subject)
+            
+            if not rows:
+                continue
+
+            if subject and len(rows_in_general_list) != 1:
+                if worksheet.title == "_csv":
+                    # Помечаем красным чтобы потом проверить метки.
+                    # По хорошему здесь добавить пересборку меток, но 
+                    # для _csv нужно писать отдельный класс похоже.
+                    self.mark_user(worksheet, email, True, COLOR_FILL_SKIPPED)
+                    self.set_comment(worksheet, email, "Метки указаны некорректно") 
+                    continue
+                if worksheet.title == "Для логинов":
+                    # Удаляем из логинов только если у человека один предмет чтобы не потерять
+                    continue
+
+            if is_array_consecutive(rows):
+                self.delete_rows(worksheet, rows[0], len(rows))
+            else:
+                for row in rows:
+                    self.delete_row(worksheet, row)
             
     def get_all_users_data(self, first_row_is_header=True) -> Tuple[UserTableData]:
         self.check_loaded()
         userdata = dict()
         ws = self.get_first_worksheet()
 
-        email_column = self.get_column_by_name(ws, 'email')
+        email_column = self.get_email_column_id(ws)
         login_column = self.get_column_by_name(ws, 'логин')
         subject_column = self.get_column_by_name(ws, 'предмет')
         sel_date_column = self.get_column_by_name(ws, 'выбранная дата')
@@ -183,11 +228,15 @@ class ExcelDriver:
                         fio += value
                     if not fio: fio = None
 
+                    mark = self.get_cell_mark(ws.cell(row=cell.row, column=fio_columns[0]))
+                    marks = [mark] if mark != 'none' else None
+
                     userdata[email] = UserTableData(
                         email=email,
                         login=ws.cell(row=cell.row, column=login_column).value,
                         fio=fio,
                         subjects=[],
+                        marks = marks
                     )
                     utd = userdata[email]
                 subject_name = ws.cell(row=cell.row, column=subject_column).value
@@ -198,6 +247,23 @@ class ExcelDriver:
         return tuple(userdata.values())
 
     @classmethod
+    def get_cell_mark(cls, cell) -> str:
+        """ Получить кодовое обозначение цветовой отметки ячейки
+            Returns: none | registered | skipped | commented
+        """
+        fill = cell.fill.fgColor
+        if fill.type != 'rgb':
+            # print Warning: unsupported fill type, use rgb fill
+            return 'none'
+        if is_blue_color(fill.value):
+            return 'registered'
+        if is_red_color(fill.value):
+            return 'skipped'
+        if fill.value == COLOR_FILL_COMMENT:
+            return 'commented'
+        return 'none'
+
+    @classmethod
     def get_column_by_name(cls, worksheet, column_name) -> int:
         for row in worksheet.iter_rows(max_row=1):
             for cell in row:
@@ -205,6 +271,13 @@ class ExcelDriver:
                 if cell.value.lower().strip() == column_name.lower().strip():
                     return cell.column
         raise ColumnNotFoundException()
+
+    @classmethod
+    def get_email_column_id(cls, worksheet) -> int:
+        try:
+            return cls.get_column_by_name(worksheet, 'email')
+        except ColumnNotFoundException:
+            return cls.get_column_by_name(worksheet, 'e-mail')
         
     @classmethod
     def get_columns_with_fio(cls, worksheet) -> Tuple[int]:
@@ -214,15 +287,46 @@ class ExcelDriver:
         fio_last_name = cls.get_column_by_name(worksheet, 'фио')
         return (fio_last_name, fio_last_name+1, fio_last_name+2)
 
+    @classmethod
+    def get_rows_with_user(cls, worksheet, email: str, subject: Optional[str] = None) -> Tuple[int]:
+        """ Returns a tuple with rows id containing the specified user with email.
+            Can be filtered by subject.
+
+            Example: (1,2,3)
+        """
+        rows_list = []
+        start_row = 1
+        email_column = cls.get_email_column_id(worksheet)
+        email = str(email).lower().strip()
+        subject = str(subject).lower().strip() if subject else None
+        subject_column = None
+
+        try:
+            subject_column = cls.get_column_by_name(worksheet, "Предмет") if subject else subject_column
+        except ColumnNotFoundException:
+            pass
+
+        for row in worksheet.iter_cols(min_col=email_column, max_col=email_column, min_row=start_row):
+            for cell in row:
+                if str(cell.value).lower().strip() != email:
+                    continue
+                if subject_column:
+                    subject_cell = worksheet.cell(row=cell.row, column=subject_column)
+                    if str(subject_cell.value).lower().strip() != subject:
+                        continue
+                rows_list.append(cell.row)
+        return rows_list
+
+
     def get_emails(self, worksheet, first_row_is_header=True):
-        email_column = self.get_column_by_name(worksheet, 'email')
+        email_column = self.get_email_column_id(worksheet)
         start_row = 2 if first_row_is_header else 1
         email_generator = worksheet.iter_cols(min_row=start_row, min_col=email_column, 
                                                 max_col=email_column, values_only=True)
         return set(next(email_generator))
     
     def get_emails_n_logins(self, worksheet, first_row_is_header=True):
-        email_column = self.get_column_by_name(worksheet, 'email')
+        email_column = self.get_email_column_id(worksheet)
         login_column = self.get_column_by_name(worksheet, 'логин')
         max_col = email_column if email_column > login_column else login_column
         start_row = 2 if first_row_is_header else 1
@@ -263,7 +367,7 @@ class ExcelDriver:
         userdata = None
         ws = self.get_first_worksheet()
 
-        email_column = self.get_column_by_name(ws, 'email')
+        email_column = self.get_email_column_id(ws)
         login_column = self.get_column_by_name(ws, 'логин')
         subject_column = self.get_column_by_name(ws, 'предмет')
         sel_date_column = self.get_column_by_name(ws, 'выбранная дата')
@@ -283,11 +387,15 @@ class ExcelDriver:
                         fio += value
                     if not fio: fio = None
 
+                    mark = self.get_cell_mark(ws.cell(row=cell.row, column=fio_columns[0]))
+                    marks = [mark] if mark != 'none' else None
+
                     userdata = UserTableData(
                         email=email,
                         login=ws.cell(row=cell.row, column=login_column).value,
                         fio=fio,
                         subjects=[],
+                        marks=marks
                     )
                 subject_name = ws.cell(row=cell.row, column=subject_column).value
                 subject_date = ws.cell(row=cell.row, column=sel_date_column).value
@@ -339,34 +447,35 @@ class ExcelDriver:
         self._xlsx.save(_filepath)
         self._filepath = _filepath
 
-    def mark_user(self, worksheet, email, first_row_is_header=True, fgColor='FF558ED5'):
+    @classmethod
+    def mark_user(cls, worksheet, email, first_row_is_header=True, fgColor='FF558ED5'):
         """ Mark users who should not be registered by blue color """
         fill = PatternFill('solid', fgColor=fgColor.upper())
         start_row = 2 if first_row_is_header else 1
-        email_column = self.get_column_by_name(worksheet, 'email')
+        email_column = cls.get_email_column_id(worksheet)
 
         for row in worksheet.iter_cols(min_col=email_column, max_col=email_column, min_row=start_row):
             for cell in row:
                 if cell.value != email:
                     continue
                 current_row = cell.row
-                self.apply_row_fill(worksheet, current_row, fill)
+                cls.apply_row_style(worksheet, current_row, {"fill": fill})
 
     def mark_user_as_registered(self, email, first_row_is_header=True):
         self.check_loaded()
         for worksheet in self._xlsx:
-            self.mark_user(worksheet, email, first_row_is_header, 'FF558ED5')
+            self.mark_user(worksheet, email, first_row_is_header, COLOR_FILL_REGISTERED)
     
     def mark_user_as_skipped(self, email, first_row_is_header=True):
         self.check_loaded()
         for worksheet in self._xlsx:
-            self.mark_user(worksheet, email, first_row_is_header, 'FFFF3838')
+            self.mark_user(worksheet, email, first_row_is_header, COLOR_FILL_SKIPPED)
 
     @classmethod
     def set_comment(cls, worksheet, email, comment) -> bool:
         """ Sets the comment at the first email cell. """
-        fill = PatternFill('solid', fgColor='FFA9D08E')
-        email_column = cls.get_column_by_name(worksheet, 'email')
+        fill = PatternFill('solid', fgColor=COLOR_FILL_COMMENT)
+        email_column = cls.get_email_column_id(worksheet)
         for col_items in worksheet.iter_cols(min_col=email_column, max_col=email_column):
             for cell in col_items:
                 if cell.value == email:
@@ -393,5 +502,3 @@ class ExcelDriver:
                 row[i].alignment = center_alignment
                 if cols_size:
                     ws.column_dimensions[row[i].column_letter].width = cols_size[i]
-
-

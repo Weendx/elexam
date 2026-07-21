@@ -211,6 +211,7 @@ class Console(RichConsole):
             {'sign': 'c', 'desc': 'Установить комментарий в таблице', 'requires': (excel)},
             {'sign': 'd', 'desc': 'Удалить пользователя', 'requires': (learning)},
             {'sign': 'dt', 'desc': 'Удалить пользователя из таблицы', 'requires': (excel)},
+            {'sign': 'dts', 'desc': 'Удалить пользователя из таблицы по предмету', 'requires': (excel)},
             {'sign': 'k', 'desc': 'Пропустить без пометки в таблице', 'requires': (True)},
             {'sign': 'l', 'desc': 'Обновить логин в таблице', 'requires': (learning, excel)},
             {'sign': 'm', 'desc': 'Назначить метку', 'requires': (learning)},
@@ -225,6 +226,8 @@ class Console(RichConsole):
             {'sign': 'x', 'desc': 'Показать доп. информацию', 'requires': (True)},
         ]
         
+        max_sign_len = max(len(item["sign"]) for item in items)
+
         for item in items:
             if type(item['requires']) == bool:
                 if not item['requires']:
@@ -235,7 +238,7 @@ class Console(RichConsole):
             choices.append(item['sign'])
             if with_help:
                 prefix = "\n " if helptext else " "
-                helptext += prefix + f"[magenta]{item['sign']:2}[/magenta]- {item['desc']}"
+                helptext += prefix + f"[magenta]{item['sign']:{max_sign_len}}[/magenta]- {item['desc']}"
 
         if with_help:
             self.print(Panel.fit(helptext))
@@ -1014,6 +1017,9 @@ class Console(RichConsole):
                 uactions_return_add(UserAction.DELETE)
             elif (selection == 'dt'):
                 uactions_return_add(UserAction.DELETE_FROM_TABLE)
+            elif (selection == 'dts'):
+                subject = self.ask("Введите название предмета")
+                uactions_return_add(UserAction(UserActionType.DELETE_FROM_TABLE_WITH_SUBJECT, subject))
             elif (selection == 'k'): 
                 if UserAction.SKIP in uactions_return:
                     uactions_return.remove(UserAction.SKIP)
