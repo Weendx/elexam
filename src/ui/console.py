@@ -152,11 +152,15 @@ class Console(RichConsole):
         tag = self.ask("[cyan]Введите метку[/cyan] [dim](без года и номера блока)[/dim]", default=tag)
         
         self.print("\n[cyan]Введите даты проведения экзамена:")
-        self.print("  [dim]ДД.ММ, через запятую без пробела.")
+        self.print("  [dim]ДД.ММ, через запятую.")
         self.print("  [dim]Номер блока будет определяться в соответствии порядку записи дат.")
         self.print("  [dim]Если в блоке экзамена нет, введите «-»")
-        self.print(Text("  Пример: 18.06,-,20.08", style="dim"))
-        date_pattern = re.compile(r"(?:(?:\d{2}\.\d{2})|-)(?:,(?:(?:\d{2}\.\d{2})|-))*")
+        self.print()
+        self.print(Text("  Пример ввода: 18.06,-,20.08", style="dim"))
+        self.print(Text("  Получится, что 18.06 - первый блок, 20.08 - третий", style="dim"))
+        self.print()
+        
+        date_pattern = re.compile(r"(?:(?:\d{2}\.\d{2})|-)(?:\s*,\s*(?:(?:\d{2}\.\d{2})|-))*")
         while True:
             _dates = self.ask("[cyan]Ввод", default=dates)
             if not date_pattern.fullmatch(_dates):
