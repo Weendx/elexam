@@ -1,6 +1,7 @@
 # fileController, [file] - file значит не само понятие файла, 
 #                           а операцию обработки файла в целом
 
+from copy import copy
 from collections import namedtuple
 from typing import Callable, Iterable, List, Optional
 import traceback
@@ -220,6 +221,7 @@ class FileController:
         
         ws_labels = driver._xlsx['Для предметов и меток']
         ws_labels_users = {}
+        ws_labels_style = {}
         cols = {
             'email': driver.get_column_by_name(ws_labels, 'email') - 1,
             'surname': driver.get_column_by_name(ws_labels, 'ФИО') - 1,
@@ -240,8 +242,8 @@ class FileController:
             fill = row[cols['surname']].fill.fgColor
             if fill.type == 'theme':
                 if fill.value == 4: continue
-                if fill.value not in [9,7,6]:
-                    raise Exception('unknown theme', fill)
+                # if fill.value not in [9,7,6,5]:
+                #     raise Exception('unknown theme', fill)
             elif fill.type == 'rgb':
                 if is_blue_color(fill.value): continue
                 if is_red_color(fill.value): continue
@@ -257,6 +259,10 @@ class FileController:
                     admission_code=row[cols['admission_code']].value, subjects=[]
                 )
                 ws_labels_users[email] = user
+                ws_labels_style[email] = {
+                    "fill": copy(row[cols['surname']].fill),
+                    "font": copy(row[cols['surname']].font)
+                }
             user.subjects.append((row[cols['subject_name']].value, row[cols['subject_date']].value))
         
         if '_csv' in driver._xlsx.sheetnames:
@@ -267,6 +273,7 @@ class FileController:
         ws = driver.create_sheet(title="_csv")
         header = "Табельный номер;Фамилия;Имя;Отчество;Login;E-mail;Пароль;Преподаватель;Группа;Метки".split(';')
         ws.append(header)
+        ws_rows = 1
 
         reexp = re.compile(r'=\(RIGHT\(..+(;|,)5\)\+23000\)\*15')
         for user in ws_labels_users.values():
@@ -281,6 +288,8 @@ class FileController:
                 user.admission_code, user.surname, user.name, user.patronymic,
                 user.login, user.email, password, 0, '', labels
             ))
+            ws_rows += 1
+            driver.apply_row_style(ws, ws_rows, ws_labels_style[user.email])
 
         ws.column_dimensions['A'].width = 15
         ws.column_dimensions['B'].width = 15

@@ -43,6 +43,16 @@ class ExcelDriver:
         
         return True
 
+    def apply_row_style(self, worksheet, row, style):
+        """ Update style of the first 9th cells in the row """
+        
+        styles = ["fill", "font", "border", "number_format", "protection", "alignment"]
+        for cell_range in worksheet.iter_rows(min_row=row, max_row=row, max_col=9):
+            for cell in cell_range:
+                for style_tag in styles:
+                    if style_tag in style:
+                        setattr(cell, style_tag, style[style_tag])
+
     def change_columns(self, email: str, changes: List[Tuple[str, str]]):
         """ Change values in columns
             changes: [(column_name, value), ...] 
@@ -339,9 +349,8 @@ class ExcelDriver:
             for cell in row:
                 if cell.value != email:
                     continue
-                for cell_range in worksheet.iter_rows(min_row=cell.row, max_row=cell.row, max_col=9):
-                    for cell_from_range in cell_range:
-                        cell_from_range.fill = fill
+                current_row = cell.row
+                self.apply_row_fill(worksheet, current_row, fill)
 
     def mark_user_as_registered(self, email, first_row_is_header=True):
         self.check_loaded()
