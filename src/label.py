@@ -5,7 +5,7 @@ import json
 
 import custom_json
 from settings import Settings
-from datatypes import Exam, Label
+from datatypes import Exam, Label, Reserve
 
 class LabelControllerError(Exception):
     pass
@@ -66,6 +66,19 @@ class LabelController:
         cls.load_exams()
 
     @classmethod
+    def load_from_share_bytes(cls, share: bytes) -> None:
+        s = base64.b64decode(share).decode()
+        s_object = json.loads(s)
+        if 'exams' in s_object and s_object['exams']:
+            Settings()[f"{cls._pr}.exams"] = s_object['exams']
+            cls.load_exams()
+        if 'reserve' in s_object and s_object['reserve']:
+            reserve = list()
+            for item in s_object['reserve']:
+                reserve.append(datetime.date.fromisoformat(item))
+            cls.set_reserve(reserve)
+
+    @classmethod
     def get_exams(cls) -> Tuple[Exam]:
         cls.load_exams()
         return tuple(cls._all_exams)
@@ -75,7 +88,17 @@ class LabelController:
         cls.load_exams()
         json_str = json.dumps(cls._all_exams, cls=custom_json.JSONEncoder)
         return base64.b64encode(bytes(json_str, 'ascii'))
-    
+
+    @classmethod
+    def get_share_bytes(cls) -> bytes:
+        cls.load_exams()
+        package = {
+            "exams": cls._all_exams,
+            "reserve": cls.get_reserve()
+        }
+        json_str = json.dumps(package, cls=custom_json.JSONEncoder)
+        return base64.b64encode(bytes(json_str, 'ascii'))
+
     @classmethod
     def get_label(cls, exam_subject: str, selected_date: datetime.date | None = None, by_month: bool = False) -> str:
         """Определеяет метку для экзамена (с ближайшим блоком)
@@ -103,12 +126,12 @@ class LabelController:
         current_date = current_date.replace(year=2000)
         day = datetime.timedelta(days=1)
         selected_date = selected_date.replace(year=2000) if selected_date else None
+        reserve = cls.get_reserve()
         ##
 
         for exam in cls._all_exams:
             if exam.subject.lower() != exam_subject.lower():
                 continue
-            block = 0
             for date_i, date in enumerate(exam.dates):
                 if selected_date == date:
                     return f"{exam.tag}{current_year}{date_i+1}"
@@ -116,6 +139,10 @@ class LabelController:
                     return f"{exam.tag}{current_year}{date_i+1}"
                 elif selected_date == None and current_date < date - day:
                     return f"{exam.tag}{current_year}{date_i+1}"
+            for date_i, date in enumerate(reserve):
+                if selected_date == date:
+                    # Буква "Р" ниже в конце - кириллица.
+                    return f"{exam.tag}{current_year}{date_i+1}Р"
 
         raise NoSuitableLabelFound(f"exam_subject={exam_subject}, selected_date={selected_date}, by_month={by_month}")
 
@@ -160,6 +187,29 @@ class LabelController:
         tag = label[:-1]
         block = int(label[-1:])
         return Label(exam_subject, tag, block)
+
+    @classmethod
+    def get_reserve(cls) -> List[Reserve]:
+        """ Резервные дни """
+
+        _reserve = list()
+        reserve = Settings()[f"{cls._pr}.reserve"]
+        if not reserve: reserve = list()
+        for item in reserve:
+            _reserve.append(datetime.date.fromisoformat(item))
+        return _reserve
+
+    @classmethod
+    def set_reserve(cls, reserve: List[Reserve]):
+        """ Резервные дни """
+
+        for i, item in enumerate(reserve):
+            if not isinstance(item, datetime.date):
+                if isinstance(item, datetime.datetime):
+                    d = item.date()
+                    reserve[i] = d
+                raise ValueError
+        Settings()[f"{cls._pr}.reserve"] = reserve
 
     @classmethod
     def test(cls):

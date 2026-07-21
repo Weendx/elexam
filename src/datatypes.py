@@ -2,7 +2,7 @@ import datetime
 from dataclasses import dataclass
 from enum import Enum
 from collections import namedtuple
-from typing import List, NamedTuple, Optional, Tuple
+from typing import List, NamedTuple, Optional, Tuple, TypeAlias
 
 AuthCookies = namedtuple('AuthCookies', ('PHPSESSID', 'hmkey'))
 
@@ -17,6 +17,7 @@ class Course:
 EmailNLogin = namedtuple('EmailNLogin', ('email', 'login'))
 
 Exam = NamedTuple('Exam', (('subject', str), ('tag', str), ('dates', List[datetime.date])))
+Reserve: TypeAlias = datetime.date
 
 MenuItem = namedtuple('MenuItem', ['title', 'action'])
 

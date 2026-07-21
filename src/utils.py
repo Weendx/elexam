@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Union, List, Optional
+import datetime
+from typing import Union, List, Optional, Iterable
 import secrets
 import string
 import pyperclip
@@ -33,21 +33,25 @@ def pluralize(number, forms):
     else:
         return forms[2]
 
-def convert_date_string(datetime_string: str) -> Union[datetime, None]:
+def convert_date_string(datetime_string: str) -> Union[datetime.datetime, None]:
         if not datetime_string: return None
         
         months = ["июнь", "июль", "август"]
         if datetime_string in months:
             month = months.index(datetime_string) + 6
-            return datetime(2001, month, 1)
+            return datetime.datetime(2001, month, 1)
 
         formats = ["%d.%m.%Y %H:%M:%S", "%d.%m.%Y", "%Y-%m-%d %H:%M:%S"]
         for fmt in formats:
             try:
-                return datetime.strptime(datetime_string, fmt)
+                return datetime.datetime.strptime(datetime_string, fmt)
             except ValueError:
                 pass
         return None
+
+def convert_block_dates(dates: Iterable[Union[datetime.date, datetime.datetime]]) -> str:
+    """ Convert block datetime dates to string like '21.06,21.07' """
+    return ",".join([(x.strftime('%d.%m') if x != datetime.date(2000,1,1) else '-') for x in dates])
 
 def generate_random_string(length=6) -> str:
     """Генерирует случайную строку заданной длины, используя безопасный генератор."""
@@ -59,18 +63,19 @@ def get_mock_user() -> UserInfo:
     courses.append(Course(
         1,
         "Вступительный курс 1", 
-        datetime.strptime("20.11.2024", "%d.%m.%Y"), 
-        datetime.strptime("11.01.2025", "%d.%m.%Y"),
+        datetime.datetime.strptime("20.11.2024", "%d.%m.%Y"), 
+        datetime.datetime.strptime("11.01.2025", "%d.%m.%Y"),
         ("Исаев Валерий Васильевич", "Лукьянова Юлия Михайловна")
     ))
     courses.append(Course(
         1,
         "Вступительный экзамен 2", 
-        datetime.strptime("05.07.2024", "%d.%m.%Y"), 
-        datetime.strptime("11.01.2025", "%d.%m.%Y")
+        datetime.datetime.strptime("05.07.2024", "%d.%m.%Y"), 
+        datetime.datetime.strptime("11.01.2025", "%d.%m.%Y")
     ))
-    registered = datetime.strptime("31.08.2024", "%d.%m.%Y")
-    logdate = datetime.strptime("28.06.2025 21:16:40", "%d.%m.%Y %H:%M:%S")
+    registered = datetime.datetime.strptime("31.08.2024", "%d.%m.%Y")
+    logdate = datetime.datetime.strptime("28.06.2025 21:16:40", "%d.%m.%Y %H:%M:%S")
+
     return UserInfo(
         mid=49460, 
         login="25-01645",
@@ -93,8 +98,8 @@ def generate_password(user_table_login: str = ""):
 def suggest_user_actions(uinfo: UserInfo, learning = None) -> List[UserAction]:
     suggestions = []
     if uinfo.registered:
-        current_date = datetime.today()
-        last_autumn = datetime(year=current_date.year - 1, month=9, day=1)
+        current_date = datetime.datetime.today()
+        last_autumn = datetime.datetime(year=current_date.year - 1, month=11, day=1)
         if uinfo.registered < last_autumn:
             suggestions.append(UserAction.DELETE)
             return suggestions

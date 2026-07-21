@@ -5,7 +5,7 @@ from sys import exit
 import datetime
 import traceback
 from time import sleep
-from typing import List, Tuple, Optional, Callable, Iterable
+from typing import List, Tuple, Optional, Callable, Iterable, Union
 
 from rich import print
 from rich.console import Console as RichConsole
@@ -30,13 +30,15 @@ from excelDriver import UserNotFoundException as ExcelUserNotFound
 from fileController import FileController
 from datatypes import (
     MenuItem, UserInfo, UserAction, 
-    UserActionType, AuthCookies, Exam
+    UserActionType, AuthCookies, Exam,
+    Reserve
 )
 from utils import (
     pluralize, get_mock_user, 
     suggest_user_actions, 
     copy_to_clipboard, generate_password,
-    convert_date_string
+    convert_date_string,
+    convert_block_dates
 )
 
 
@@ -81,11 +83,23 @@ class Console(RichConsole):
         menuitems.append(MenuItem('Редактировать экзамен', 'edit'))
         menuitems.append(MenuItem('Удалить экзамен', 'delete'))
         menuitems.append(MenuItem('Определить метку', 'test'))
+        menuitems.append(MenuItem('Резервные дни', 'reserve'))
         menuitems.append(MenuItem('Строка обмена', 'share'))
         menuitems.append(MenuItem('Назад', 'exit'))
         menuitems_len = len(menuitems)
         menutext = " " + "\n ".join([f"{x + 1}. {y}" for x, y in enumerate(map(lambda x: x.title, menuitems))])
         menu = Panel.fit(menutext, title="= ==== ==  [italic]Управление метками[/italic]  == ==== =", border_style="yellow")
+        return menu, menuitems, menuitems_len
+
+    def _create_reserve_menu(self, status_text: str):
+        """ Returns menu renderable, menu items and menu length for run_reserve_menu() """
+        menuitems = list()
+        menuitems.append(MenuItem('Изменить', 'set'))
+        menuitems.append(MenuItem('Назад', 'exit'))
+        menuitems_len = len(menuitems)
+        menutext = " " + "\n ".join([f"{x + 1}. {y}" for x, y in enumerate(map(lambda x: x.title, menuitems))])
+        menutext += "\n\n " + status_text
+        menu = Panel.fit(menutext, title="= ==== ==  [italic]Резервные дни[/italic]  == ==== =", border_style="yellow")
         return menu, menuitems, menuitems_len
 
     @staticmethod
@@ -143,15 +157,8 @@ class Console(RichConsole):
             dates.append(datetime.date(2000, int(month), int(day)))
         return dates
 
-    def ask_exam_params(self, exam: Optional[Exam] = None) -> Exam:
-        subject = exam.subject if exam else None
-        tag = exam.tag if exam else None
-        dates = ",".join([(x.strftime('%d.%m') if x != datetime.date(2000,1,1) else '-') for x in exam.dates]) if exam else None
-
-        subject = self.ask("[cyan]Введите название[/cyan] [dim](предмет)[/dim]", default=subject)
-        tag = self.ask("[cyan]Введите метку[/cyan] [dim](без года и номера блока)[/dim]", default=tag)
-        
-        self.print("\n[cyan]Введите даты проведения экзамена:")
+    def ask_block_dates(self, message: str, default: Optional[List[Union[datetime.date, datetime.datetime]]] = None) -> List[datetime.date]:
+        self.print(message)
         self.print("  [dim]ДД.ММ, через запятую.")
         self.print("  [dim]Номер блока будет определяться в соответствии порядку записи дат.")
         self.print("  [dim]Если в блоке экзамена нет, введите «-»")
@@ -162,7 +169,7 @@ class Console(RichConsole):
         
         date_pattern = re.compile(r"(?:(?:\d{2}\.\d{2})|-)(?:\s*,\s*(?:(?:\d{2}\.\d{2})|-))*")
         while True:
-            _dates = self.ask("[cyan]Ввод", default=dates)
+            _dates = self.ask("[cyan]Ввод", default=default)
             if not date_pattern.fullmatch(_dates):
                 continue
             try:
@@ -171,7 +178,24 @@ class Console(RichConsole):
             except ValueError:
                 continue
 
+        return new_dates
+
+    def ask_exam_params(self, exam: Optional[Exam] = None) -> Exam:
+        subject = exam.subject if exam else None
+        tag = exam.tag if exam else None
+        dates = convert_block_dates(exam.dates) if exam else None
+
+        subject = self.ask("[cyan]Введите название[/cyan] [dim](предмет)[/dim]", default=subject)
+        tag = self.ask("[cyan]Введите метку[/cyan] [dim](без года и номера блока)[/dim]", default=tag)
+        new_dates = self.ask_block_dates("\n[cyan]Введите даты проведения экзамена:", default=dates)
+
         return Exam(subject, tag, new_dates)
+
+    def ask_reserve_params(self, reserve: Optional[List[Reserve]] = None) -> List[Reserve]:
+        dates = convert_block_dates(reserve) if reserve else None
+
+        new_dates = self.ask_block_dates("\n[cyan]Введите даты резервных дней:", default=dates)
+        return new_dates
 
     def ask_filepath(self, required=True, cache_suffix='filepath') -> str:
         """ Returns path of the file
@@ -927,11 +951,13 @@ class Console(RichConsole):
                     except NoSuitableLabelFound:
                         self.print("[magenta]>> Метка не найдена")
                     input("Нажмите Enter чтобы продолжить...")
+                case 'reserve':
+                    self.run_reserve_menu()
                 case 'share':
                     self.print("\n[dim blue]Обменивайтесь метками с помощью строки обмена!")
 
                     share_filepath = os.path.join(os.getcwd(), 'share_string.txt')
-                    share_bytes = LabelController.get_exams_share_bytes()
+                    share_bytes = LabelController.get_share_bytes()
                     with open(share_filepath, mode='wb') as file: 
                         file.write(share_bytes)
                     self.print("[blue]Текущая строка обмена сохранена в файл по адресу:\n",
@@ -949,12 +975,37 @@ class Console(RichConsole):
                             with open(filepath, mode='rb') as file: 
                                 share_bytes = file.read()
                             try:
-                                LabelController.load_exams_from_share_bytes(share_bytes)
+                                LabelController.load_from_share_bytes(share_bytes)
                             except Exception:
                                 self.print("[red]Возникла ошибка при разборе файла обмена")
                                 raise
                             self.print("[green]Загрузка данных из файла обмена завершена.")
 
+                case 'exit': return
+
+    def run_reserve_menu(self):
+        while True:
+            status_text = "Список резервных дней пуст"
+            current_reserve_list = LabelController.get_reserve()
+            if current_reserve_list:
+                status_text = "Резервные дни: [cyan]" + convert_block_dates(current_reserve_list)
+
+            menu, menuitems, menuitems_len = self._create_reserve_menu(status_text)
+
+            self.print("\n")
+            self.print(menu)
+            selection = IntPrompt.ask("[yellow]Выберите действие")
+
+            # Выполнение действия
+            action = None
+            if selection > 0 and selection <= menuitems_len:
+                action = menuitems[selection - 1].action
+
+            match action:
+                case 'set':
+                    self.print("\n[dim blue]Установка резервных дней[/dim blue]")
+                    reserve_list = self.ask_reserve_params()
+                    LabelController.set_reserve(reserve_list)
                 case 'exit': return
 
     def select_user_actions(self, uinfo, suggested: Optional[List[UserAction]] = None,
