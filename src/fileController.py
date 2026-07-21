@@ -241,7 +241,9 @@ class FileController:
         for row in ws_labels.iter_rows(min_row=2):
             fill = row[cols['surname']].fill.fgColor
             if fill.type == 'theme':
-                if fill.value == 4: continue
+                if fill.value == 4: 
+                    print(f"Пользователь {email} пропущен из-за заливки")
+                    continue
                 # if fill.value not in [9,7,6,5]:
                 #     raise Exception('unknown theme', fill)
             elif fill.type == 'rgb':
